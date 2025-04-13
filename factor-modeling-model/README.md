@@ -1,6 +1,6 @@
 # DJIA Factor Modeling Analysis
 
-This project implements factor modeling for the DJIA 30 stocks, analyzing the effectiveness of various factors including PEG, RSI-14, RSI-28, and more.
+This project implements factor modeling for the DJIA 30 stocks, analyzing the effectiveness of various factors across multiple categories.
 
 ## Overview
 
@@ -19,12 +19,87 @@ The analysis follows these steps for each factor:
 
 ## Implemented Factors
 
-### Fundamental Factors
+### Valuation Factors
 - **PEG (Price/Earnings to Growth)**: Lower PEG indicates better value relative to growth
+- **PB (Price-to-Book)**: Lower P/B indicates potentially undervalued stocks
+- **PE (Price-to-Earnings)**: Lower P/E indicates potentially undervalued stocks
+- **PS (Price-to-Sales)**: Lower P/S indicates potentially undervalued stocks
+- **PFCF (Price-to-Free-Cash-Flow)**: Lower P/FCF indicates potentially undervalued stocks
 
 ### Technical Factors
 - **RSI-14 (Relative Strength Index, 14-day window)**: Measures momentum by comparing recent gains to recent losses
 - **RSI-28 (Relative Strength Index, 28-day window)**: Longer-term momentum indicator with less sensitivity to short-term price changes
+- **ROC-20 (Rate of Change, 20-day window)**: Measures price momentum over a 20-day period
+- **MA-Crossover**: Signals based on moving average crossovers
+- **Bollinger Bands**: Measures price volatility and potential reversal points
+
+### Fama-French Factors
+- **SMB (Small Minus Big)**: Measures the excess return of small-cap stocks over large-cap stocks
+- **HML (High Minus Low)**: Measures the excess return of value stocks over growth stocks
+- **Rm-Rf (Market Factor)**: Measures the excess return of the market over the risk-free rate
+- **RMW (Robust Minus Weak)**: Measures the excess return of high profitability stocks over low profitability stocks
+- **CMA (Conservative Minus Aggressive)**: Measures the excess return of low investment stocks over high investment stocks
+
+### Liquidity Factors
+- **Trading Volume**: Measures stock liquidity based on trading volume
+- **Bid-Ask Spread**: Measures transaction costs and liquidity
+- **Amihud Illiquidity**: Measures price impact of trades
+- **Turnover Ratio**: Measures trading activity relative to shares outstanding
+
+### Financial Health Factors
+- **Current Ratio**: Measures a company's ability to pay short-term obligations
+- **Quick Ratio**: Measures a company's ability to pay short-term obligations without selling inventory
+- **Cash Ratio**: Measures a company's ability to cover short-term liabilities with cash
+- **Working Capital**: Measures a company's short-term financial health
+- **Altman Z-Score**: Predicts the probability of bankruptcy
+
+### Operational Factors
+- **Inventory Turnover**: Measures how efficiently a company manages its inventory
+- **Asset Turnover**: Measures how efficiently a company uses its assets to generate revenue
+- **Receivables Turnover**: Measures how efficiently a company collects revenue
+- **Gross Profit Margin**: Measures a company's manufacturing and distribution efficiency
+- **Operating Margin**: Measures a company's operating efficiency
+
+### Financial Risk Factors
+- **Debt-to-Equity**: Measures a company's financial leverage
+- **Interest Coverage**: Measures a company's ability to pay interest on its debt
+- **Debt-to-EBITDA**: Measures a company's ability to pay off its debt
+- **Financial Leverage**: Measures a company's use of debt
+- **Beta**: Measures a stock's volatility relative to the market
+
+### Growth Factors
+- **Revenue Growth**: Measures a company's revenue growth rate
+- **Earnings Growth**: Measures a company's earnings growth rate
+- **Cash Flow Growth**: Measures a company's cash flow growth rate
+- **Dividend Growth**: Measures a company's dividend growth rate
+- **Book Value Growth**: Measures a company's book value growth rate
+
+### ESG Factors
+- **Board Age**: Average age of a company's board of directors
+- **Board Diversity**: Measures diversity in a company's board of directors
+- **Executive Compensation to Revenue**: Ratio of executive compensation to company revenue
+- **Environment Rating**: Environmental sustainability rating
+- **Social Rating**: Social responsibility rating
+- **Governance Rating**: Corporate governance rating
+- **Carbon Footprint**: Measures a company's carbon emissions
+
+### Sentiment Factors
+- **Average Sentiment**: Measures the average sentiment of news and social media about a company
+- **Sentiment Momentum**: Measures the change in sentiment over time
+- **News Volume**: Measures the volume of news about a company
+- **Analyst Recommendations**: Measures analyst sentiment about a company
+
+## Strategy Framework
+
+The project includes both long-short and long-only trading strategies:
+
+### Long-Short Strategy
+- Goes long on stocks with high factor scores and short on stocks with low factor scores
+- Configurable parameters for position sizing and allocation
+
+### Long-Only Strategy
+- Only takes long positions on stocks with high factor scores
+- Supports both market-cap and equal weighting
 
 ## Data Source
 
@@ -36,11 +111,31 @@ The analysis uses stock price data from a ClickHouse database:
 
 ## Project Structure
 
-- `djia_factor_analysis.py` - Core implementation of factor analysis
+- `factors/` - Directory containing factor class implementations
+  - `base_factor.py` - Base class for all factors
+  - `valuation_factors.py` - Valuation factor implementations (PEG, PB, etc.)
+  - `technical_factors.py` - Technical factor implementations (RSI, ROC, etc.)
+  - `fama_french_factors.py` - Fama-French factor implementations
+  - `liquidity_factors.py` - Liquidity factor implementations
+  - `financial_health_factors.py` - Financial health factor implementations
+  - `operational_factors.py` - Operational factor implementations
+  - `financial_risk_factors.py` - Financial risk factor implementations
+  - `growth_factors.py` - Growth factor implementations
+  - `esg_factors.py` - ESG factor implementations
+  - `sentiment_factors.py` - Sentiment factor implementations
+- `strategy/` - Directory containing strategy implementations
+  - `base_strategy.py` - Base class for all strategies
+  - `long_short_strategy.py` - Long-short strategy implementation
+  - `long_only_strategy.py` - Long-only strategy implementation
 - `clickhouse_utils.py` - Utility functions for ClickHouse operations
+- `config.py` - Configuration loader for environment variables
 - `run_factor_analysis.py` - Script to run analysis for multiple factors
+- `run_backtest.py` - Script to run backtests for trading strategies
 - `generate_factor_dashboard.py` - Dashboard generation script
+- `factor_weight_optimizer.py` - Script to optimize factor weights
+- `analyze_trading_results.py` - Script to analyze trading results
 - `requirements.txt` - Required Python packages
+- `.env` - Environment variables for configuration
 
 ## Database Schema
 
@@ -64,17 +159,33 @@ The project uses the following tables in ClickHouse:
 
 ### Installation
 
-1. Install required packages:
+1. Clone the repository:
+   ```
+   git clone <repository-url>
+   cd factor-modeling-model
+   ```
+
+2. Create and activate a virtual environment:
+   ```
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. Install required packages:
    ```
    pip install -r requirements.txt
    ```
+
+4. Configure environment variables:
+   - Copy `.env.example` to `.env` (if not already present)
+   - Update the values in `.env` with your database credentials and settings
 
 ### Running the Analysis
 
 To run the factor analysis for all factors:
 
 ```bash
-python run_factor_analysis.py --all
+python run_factor_analysis.py --factor ALL
 ```
 
 To run the analysis for a specific factor:
@@ -85,10 +196,42 @@ python run_factor_analysis.py --factor RSI14
 python run_factor_analysis.py --factor RSI28
 ```
 
-To specify a date range:
+To run the analysis for a specific factor and save results to a custom directory:
 
 ```bash
-python run_factor_analysis.py --all --start-date 2025-01-01 --end-date 2025-03-31
+python run_factor_analysis.py --factor PEG --output-dir my_results
+```
+
+To specify a date range and output directory:
+
+```bash
+python run_factor_analysis.py --factor ALL --start-date 2025-01-01 --end-date 2025-03-31 --output-dir custom_results
+```
+
+To run analysis and generate dashboards in a specific directory:
+
+```bash
+python run_factor_analysis.py --factor ALL --dashboard --output-dir factor_output
+```
+
+### Running Backtests
+
+To run the trading strategy with default settings:
+
+```bash
+python run_backtest.py --strategy long_short --output-dir my_backtest_results
+```
+
+To run with both long-short and long-only strategies:
+
+```bash
+python run_backtest.py --strategy both --output-dir my_backtest_results
+```
+
+To run with parallel processing:
+
+```bash
+python run_backtest.py --strategy both --parallel --num-processes 4
 ```
 
 ### Generating Dashboards
@@ -96,21 +239,36 @@ python run_factor_analysis.py --all --start-date 2025-01-01 --end-date 2025-03-3
 To generate dashboards from the stored factor data:
 
 ```bash
-python generate_factor_dashboard.py
+python generate_factor_dashboard.py --factor ALL --comparison --output-dir my_dashboards
 ```
 
-## Results
+To generate a dashboard for a specific factor:
 
-The analysis produces several outputs:
+```bash
+python generate_factor_dashboard.py --factor PEG --output-dir factor_results
+```
 
-1. **ClickHouse Database**: Results stored in tables
-2. **Visualizations**:
-   - Cumulative returns charts
-   - Statistical analysis charts
-   - Factor comparison charts
-3. **Dashboard**:
-   - Individual factor dashboards
-   - Factor comparison dashboard
+### Optimizing Factor Weights
+
+To optimize factor weights based on historical performance:
+
+```bash
+python factor_weight_optimizer.py --method sharpe --output-dir my_factor_weights
+```
+
+Available optimization methods:
+- `sharpe`: Weight by Sharpe ratio
+- `equal`: Equal weighting
+- `information_ratio`: Weight by Information ratio
+- `return`: Weight by annualized return
+
+### Analyzing Trading Results
+
+To analyze the results of a backtest:
+
+```bash
+python analyze_trading_results.py --results-dir my_backtest_results --output-dir my_analysis
+```
 
 ## Interpreting Results
 
@@ -123,10 +281,70 @@ The analysis produces several outputs:
 
 To add a new factor:
 
-1. Implement the factor calculation function in `djia_factor_analysis.py`
-2. Create a factor analysis function similar to `run_peg_factor_analysis` or `run_rsi_factor_analysis`
-3. Add the factor to `run_factor_analysis.py`
-4. Run the analysis and generate dashboards
+1. Create a new factor class in the appropriate file in the `factors` directory, inheriting from `BaseFactor`:
+
+```python
+from factors.base_factor import BaseFactor
+
+class MyNewFactor(BaseFactor):
+    """
+    My new factor implementation
+    """
+    
+    def __init__(self, param1=default_value, param2=default_value):
+        """
+        Initialize the factor
+        
+        Parameters:
+        - param1: Description of parameter 1
+        - param2: Description of parameter 2
+        """
+        super().__init__(name="MyNewFactor", factor_type="MyFactorType")
+        self.param1 = param1
+        self.param2 = param2
+    
+    def calculate(self, ticker, start_date, end_date):
+        """
+        Calculate factor values for a ticker
+        
+        Parameters:
+        - ticker: Stock ticker
+        - start_date: Start date (YYYY-MM-DD)
+        - end_date: End date (YYYY-MM-DD)
+        
+        Returns:
+        - Series with factor values
+        """
+        # Implement factor calculation logic here
+        # ...
+        
+        return factor_values
+```
+
+2. Update the `__init__.py` file in the `factors` directory to import and expose your new factor:
+
+```python
+from factors.base_factor import BaseFactor
+# ... other imports ...
+from factors.my_factor_file import MyNewFactor
+
+__all__ = ['BaseFactor', ..., 'MyNewFactor']
+```
+
+3. Register your factor in `run_factor_analysis.py` by adding it to the factor registry:
+
+```python
+FACTOR_REGISTRY = {
+    # ... existing factors ...
+    'MYNEWFACTOR': MyNewFactor,
+}
+```
+
+4. Run the analysis with your new factor:
+
+```bash
+python run_factor_analysis.py --factor MYNEWFACTOR
+```
 
 ## License
 
