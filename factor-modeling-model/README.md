@@ -22,72 +22,28 @@ The analysis follows these steps for each factor:
 ### Valuation Factors
 - **PEG (Price/Earnings to Growth)**: Lower PEG indicates better value relative to growth
 - **PB (Price-to-Book)**: Lower P/B indicates potentially undervalued stocks
-- **PE (Price-to-Earnings)**: Lower P/E indicates potentially undervalued stocks
-- **PS (Price-to-Sales)**: Lower P/S indicates potentially undervalued stocks
-- **PFCF (Price-to-Free-Cash-Flow)**: Lower P/FCF indicates potentially undervalued stocks
 
 ### Technical Factors
 - **RSI-14 (Relative Strength Index, 14-day window)**: Measures momentum by comparing recent gains to recent losses
 - **RSI-28 (Relative Strength Index, 28-day window)**: Longer-term momentum indicator with less sensitivity to short-term price changes
 - **ROC-20 (Rate of Change, 20-day window)**: Measures price momentum over a 20-day period
-- **MA-Crossover**: Signals based on moving average crossovers
-- **Bollinger Bands**: Measures price volatility and potential reversal points
 
 ### Fama-French Factors
 - **SMB (Small Minus Big)**: Measures the excess return of small-cap stocks over large-cap stocks
 - **HML (High Minus Low)**: Measures the excess return of value stocks over growth stocks
 - **Rm-Rf (Market Factor)**: Measures the excess return of the market over the risk-free rate
-- **RMW (Robust Minus Weak)**: Measures the excess return of high profitability stocks over low profitability stocks
-- **CMA (Conservative Minus Aggressive)**: Measures the excess return of low investment stocks over high investment stocks
 
 ### Liquidity Factors
 - **Trading Volume**: Measures stock liquidity based on trading volume
-- **Bid-Ask Spread**: Measures transaction costs and liquidity
-- **Amihud Illiquidity**: Measures price impact of trades
-- **Turnover Ratio**: Measures trading activity relative to shares outstanding
-
-### Financial Health Factors
-- **Current Ratio**: Measures a company's ability to pay short-term obligations
-- **Quick Ratio**: Measures a company's ability to pay short-term obligations without selling inventory
-- **Cash Ratio**: Measures a company's ability to cover short-term liabilities with cash
-- **Working Capital**: Measures a company's short-term financial health
-- **Altman Z-Score**: Predicts the probability of bankruptcy
 
 ### Operational Factors
 - **Inventory Turnover**: Measures how efficiently a company manages its inventory
-- **Asset Turnover**: Measures how efficiently a company uses its assets to generate revenue
-- **Receivables Turnover**: Measures how efficiently a company collects revenue
-- **Gross Profit Margin**: Measures a company's manufacturing and distribution efficiency
-- **Operating Margin**: Measures a company's operating efficiency
-
-### Financial Risk Factors
-- **Debt-to-Equity**: Measures a company's financial leverage
-- **Interest Coverage**: Measures a company's ability to pay interest on its debt
-- **Debt-to-EBITDA**: Measures a company's ability to pay off its debt
-- **Financial Leverage**: Measures a company's use of debt
-- **Beta**: Measures a stock's volatility relative to the market
-
-### Growth Factors
-- **Revenue Growth**: Measures a company's revenue growth rate
-- **Earnings Growth**: Measures a company's earnings growth rate
-- **Cash Flow Growth**: Measures a company's cash flow growth rate
-- **Dividend Growth**: Measures a company's dividend growth rate
-- **Book Value Growth**: Measures a company's book value growth rate
 
 ### ESG Factors
 - **Board Age**: Average age of a company's board of directors
-- **Board Diversity**: Measures diversity in a company's board of directors
-- **Executive Compensation to Revenue**: Ratio of executive compensation to company revenue
-- **Environment Rating**: Environmental sustainability rating
-- **Social Rating**: Social responsibility rating
-- **Governance Rating**: Corporate governance rating
-- **Carbon Footprint**: Measures a company's carbon emissions
 
 ### Sentiment Factors
 - **Average Sentiment**: Measures the average sentiment of news and social media about a company
-- **Sentiment Momentum**: Measures the change in sentiment over time
-- **News Volume**: Measures the volume of news about a company
-- **Analyst Recommendations**: Measures analyst sentiment about a company
 
 ## Strategy Framework
 
