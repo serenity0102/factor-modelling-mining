@@ -1,30 +1,121 @@
 import pandas as pd
 import numpy as np
+import json
+import boto3
+from datetime import datetime, timedelta
+import os
 from factors.base_factor import BaseFactor
 
 class AverageSentimentFactor(BaseFactor):
     """
     Average Sentiment factor implementation
     Measures the average sentiment of news and social media about a company
+    using Amazon Bedrock's Nova Lite model to analyze sentiment on a -1 to 1 scale.
     """
     
-    def __init__(self, window=14):
+    def __init__(self, window=14, s3_bucket="stock-news-data-u9gs99r4"):
         """
         Initialize the Average Sentiment factor
         
         Parameters:
         - window: Number of days to average sentiment (default: 14 days)
+        - s3_bucket: S3 bucket name containing market news data
         """
         self.window = window
+        self.s3_bucket = s3_bucket
         super().__init__(
             name=f"AvgSentiment{window}",
             factor_type="Sentiment",
-            description=f"Average Sentiment over {window} days. Measures the average sentiment of news and social media about a company."
+            description=f"Average Sentiment over {window} days. Measures the average sentiment of news and social media about a company using Amazon Bedrock."
         )
+    
+    def _get_sentiment_from_bedrock(self, text):
+        """
+        Get sentiment score from Amazon Bedrock Nova Lite model
+        
+        Parameters:
+        - text: Text to analyze for sentiment
+        
+        Returns:
+        - Sentiment score between -1 and 1
+        """
+        try:
+            # Initialize Bedrock client with profile
+            session = boto3.Session(profile_name='factor')
+            bedrock_runtime = session.client(
+                service_name='bedrock-runtime',
+                region_name='us-east-1'  # Adjust region as needed
+            )
+            
+            # Prepare prompt for sentiment analysis
+            prompt = f"""
+            Analyze the sentiment of the following text about a company's stock and financial performance.
+            Rate the sentiment on a scale from -1 to 1, where:
+            - -1 represents extremely negative sentiment
+            - 0 represents neutral sentiment
+            - 1 represents extremely positive sentiment
+            
+            Only respond with a single number between -1 and 1, with up to two decimal places.
+            
+            Text to analyze:
+            {text}
+            """
+            
+            # Call Amazon Nova Lite model through Bedrock using converse API
+            messages = [
+                {"role": "user", "content": [{"text": prompt}]},
+            ]
+            
+            response = bedrock_runtime.converse(
+                modelId="us.amazon.nova-lite-v1:0",
+                messages=messages
+            )
+            
+            # Parse response
+            sentiment_text = response['output']['message']['content'][0]['text'].strip()
+            
+            # Convert to float and ensure it's in range [-1, 1]
+            sentiment_score = float(sentiment_text)
+            sentiment_score = max(min(sentiment_score, 1.0), -1.0)
+            
+            return sentiment_score
+            
+        except Exception as e:
+            print(f"Error getting sentiment from Bedrock: {str(e)}")
+            # Return neutral sentiment in case of error
+            return 0.0
+    
+    def _get_news_from_s3(self, ticker, date):
+        """
+        Get market news data from S3 for a specific ticker and date
+        
+        Parameters:
+        - ticker: Stock ticker symbol
+        - date: Date string in format YYYY-MM-DD
+        
+        Returns:
+        - Market news data as dictionary, or None if not found
+        """
+        try:
+            # Use the factor profile for S3 access
+            session = boto3.Session(profile_name='factor')
+            s3_client = session.client('s3')
+            s3_key = f"{ticker}/{date}/market_news.json"
+            
+            response = s3_client.get_object(
+                Bucket=self.s3_bucket,
+                Key=s3_key
+            )
+            
+            news_data = json.loads(response['Body'].read().decode('utf-8'))
+            return news_data
+        except Exception as e:
+            print(f"Error retrieving news for {ticker} on {date}: {str(e)}")
+            return None
     
     def calculate(self, price_data):
         """
-        Calculate Average Sentiment from synthetic sentiment data
+        Calculate Average Sentiment from S3 market news data using Amazon Bedrock
         
         Parameters:
         - price_data: Dictionary of DataFrames with price data (key=ticker, value=DataFrame)
@@ -40,25 +131,34 @@ class AverageSentimentFactor(BaseFactor):
         all_dates = sorted(list(all_dates))
         sentiment_df = pd.DataFrame(index=all_dates)
         
-        # Generate synthetic daily sentiment data for each stock
+        # Calculate daily sentiment for each stock
         daily_sentiment = {}
         
-        for ticker, df in price_data.items():
-            # Generate base sentiment (scale of -1 to 1)
-            base_sentiment = np.random.uniform(-0.2, 0.2)
+        for ticker in price_data.keys():
+            ticker_sentiment = {}
             
-            # Create a series with random variation
-            # Sentiment is somewhat correlated with price changes
-            price_changes = df['adjusted_close'].pct_change().fillna(0)
+            # Process each date for this ticker
+            for date_obj in all_dates:
+                date_str = date_obj.strftime('%Y-%m-%d')
+                
+                # Get news data from S3
+                news_data = self._get_news_from_s3(ticker, date_str)
+                
+                if news_data and 'answer' in news_data:
+                    # Extract the answer text
+                    answer_text = news_data['answer']
+                    
+                    # Get sentiment score from Bedrock
+                    sentiment_score = self._get_sentiment_from_bedrock(answer_text)
+                    
+                    # Store sentiment score
+                    ticker_sentiment[date_obj] = sentiment_score
+                else:
+                    # No news data available, use neutral sentiment
+                    ticker_sentiment[date_obj] = 0.0
             
-            # Mix of price correlation and random noise
-            sentiment_series = base_sentiment + 0.5 * price_changes + np.random.normal(0, 0.1, len(df))
-            
-            # Ensure sentiment is within -1 to 1 range
-            sentiment_series = np.clip(sentiment_series, -1, 1)
-            
-            # Store in dictionary
-            daily_sentiment[ticker] = pd.Series(sentiment_series, index=df.index)
+            # Convert to Series
+            daily_sentiment[ticker] = pd.Series(ticker_sentiment)
         
         # Calculate rolling average sentiment for each stock
         for ticker, sentiment_series in daily_sentiment.items():
@@ -67,5 +167,170 @@ class AverageSentimentFactor(BaseFactor):
             
             # Add to DataFrame
             sentiment_df[ticker] = rolling_sentiment
+        
+        return sentiment_df
+        
+    def backfill_missing_dates(self, sentiment_df):
+        """
+        Backfill missing dates with the most recent available sentiment
+        
+        Parameters:
+        - sentiment_df: DataFrame with sentiment values
+        
+        Returns:
+        - DataFrame with backfilled sentiment values
+        """
+        return sentiment_df.fillna(method='ffill')
+
+
+class NewsSentimentFactor(BaseFactor):
+    """
+    News Sentiment factor implementation
+    Analyzes the sentiment of recent news articles about a company
+    using Amazon Bedrock's Nova Lite model.
+    """
+    
+    def __init__(self, s3_bucket="stock-news-data-u9gs99r4"):
+        """
+        Initialize the News Sentiment factor
+        
+        Parameters:
+        - s3_bucket: S3 bucket name containing market news data
+        """
+        self.s3_bucket = s3_bucket
+        super().__init__(
+            name="NewsSentiment",
+            factor_type="Sentiment",
+            description="Sentiment of recent news articles about a company using Amazon Bedrock."
+        )
+    
+    def _get_sentiment_from_bedrock(self, text):
+        """
+        Get sentiment score from Amazon Bedrock Nova Lite model
+        
+        Parameters:
+        - text: Text to analyze for sentiment
+        
+        Returns:
+        - Sentiment score between -1 and 1
+        """
+        try:
+            # Initialize Bedrock client with profile
+            session = boto3.Session(profile_name='factor')
+            bedrock_runtime = session.client(
+                service_name='bedrock-runtime',
+                region_name='us-east-1'  # Adjust region as needed
+            )
+            
+            # Prepare prompt for sentiment analysis
+            prompt = f"""
+            Analyze the sentiment of the following text about a company's stock and financial performance.
+            Rate the sentiment on a scale from -1 to 1, where:
+            - -1 represents extremely negative sentiment
+            - 0 represents neutral sentiment
+            - 1 represents extremely positive sentiment
+            
+            Only respond with a single number between -1 and 1, with up to two decimal places. No need explanation.
+            
+            Text to analyze:
+            {text}
+            """
+            
+            # Call Amazon Nova Lite model through Bedrock using converse API
+            messages = [
+                {"role": "user", "content": [{"text": prompt}]},
+            ]
+            
+            response = bedrock_runtime.converse(
+                modelId="us.amazon.nova-pro-v1:0",
+                messages=messages
+            )
+            
+            # Parse response
+            sentiment_text = response['output']['message']['content'][0]['text'].strip()
+            
+            # Convert to float and ensure it's in range [-1, 1]
+            sentiment_score = float(sentiment_text)
+            sentiment_score = max(min(sentiment_score, 1.0), -1.0)
+            
+            return sentiment_score
+            
+        except Exception as e:
+            print(f"Error getting sentiment from Bedrock: {str(e)}")
+            # Return neutral sentiment in case of error
+            return 0.0
+    
+    def _get_news_from_s3(self, ticker, date):
+        """
+        Get market news data from S3 for a specific ticker and date
+        
+        Parameters:
+        - ticker: Stock ticker symbol
+        - date: Date string in format YYYY-MM-DD
+        
+        Returns:
+        - Market news data as dictionary, or None if not found
+        """
+        try:
+            # Use the factor profile for S3 access
+            session = boto3.Session(profile_name='factor')
+            s3_client = session.client('s3')
+            s3_key = f"{ticker}/{date}/market_news.json"
+            
+            response = s3_client.get_object(
+                Bucket=self.s3_bucket,
+                Key=s3_key
+            )
+            
+            news_data = json.loads(response['Body'].read().decode('utf-8'))
+            return news_data
+        except Exception as e:
+            print(f"Error retrieving news for {ticker} on {date}: {str(e)}")
+            return None
+    
+    def calculate(self, price_data):
+        """
+        Calculate News Sentiment from S3 market news data using Amazon Bedrock
+        
+        Parameters:
+        - price_data: Dictionary of DataFrames with price data (key=ticker, value=DataFrame)
+        
+        Returns:
+        - DataFrame with News Sentiment values (index=dates, columns=tickers)
+        """
+        # Get all unique dates from price data
+        all_dates = set()
+        for ticker, df in price_data.items():
+            all_dates.update(df.index)
+        
+        all_dates = sorted(list(all_dates))
+        sentiment_df = pd.DataFrame(index=all_dates)
+        
+        # Calculate daily sentiment for each stock
+        for ticker in price_data.keys():
+            ticker_sentiment = {}
+            
+            # Process each date for this ticker
+            for date_obj in all_dates:
+                date_str = date_obj.strftime('%Y-%m-%d')
+                
+                # Get news data from S3
+                news_data = self._get_news_from_s3(ticker, date_str)
+                
+                if news_data and 'answer' in news_data:
+                    # Extract the answer text
+                    answer_text = news_data['answer']
+                    
+                    # Get sentiment score from Bedrock
+                    sentiment_score = self._get_sentiment_from_bedrock(answer_text)
+                    
+                    # Store sentiment score
+                    ticker_sentiment[date_obj] = sentiment_score
+                else:
+                    # No news data available, use neutral sentiment
+                    ticker_sentiment[date_obj] = 0.0
+            
+            # Add to DataFrame
+            sentiment_df[ticker] = pd.Series(ticker_sentiment)
         
         return sentiment_df
