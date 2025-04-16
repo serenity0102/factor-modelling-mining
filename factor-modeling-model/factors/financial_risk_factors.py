@@ -18,7 +18,7 @@ class DebtToEquityFactor(BaseFactor):
         super().__init__(
             name="DebtToEquity",
             factor_type="Financial Risk",
-            description="Debt-to-Equity Ratio (Total Debt mod Shareholders Equity). Measures a company financial leverage."
+            description="Debt-to-Equity Ratio (Total Debt is divided by Shareholders Equity). Measures a company financial leverage."
         )
         
         # Database configuration for this factor
@@ -91,14 +91,13 @@ class DebtToEquityFactor(BaseFactor):
             
             # Pivot to get tickers as columns
             de_df = data.pivot(index='date', columns='ticker', values='debt_to_equity_ratio')
-            de_df = de_df.reindex(pd.date_range(de_df.index.min(), end_date, freq='D')).ffill()
+
+            # Forward fill missing values (use previous day's value)
+            de_df = de_df.reindex(pd.date_range(start_date, end_date, freq='D')).ffill()
 
             # Reindex to match all dates in price data
             de_df = de_df.reindex(pd.DatetimeIndex(all_dates))
-            
-            # Forward fill missing values (use previous day's value)
-            #de_df = de_df.fillna(method='ffill')
-            
+
             # If there are still NaN values (e.g., at the beginning), fill with industry averages or reasonable defaults
             de_df = de_df.fillna(1.0)  # Default debt-to-equity ratio of 1.0
             

@@ -7,7 +7,7 @@ from clickhouse_driver import Client
 class ClickHouseUtils:
     """Utility class for ClickHouse operations"""
     
-    def __init__(self, host='44.222.122.134', port=9000, user='default', password='clickhouse@aws', database='factor_model_tick_data_database'):
+    def __init__(self, host='44.222.122.134', port=9000, user='user', password='password', database='factor_model_tick_data_database'):
         """Initialize ClickHouse connection"""
         self.host = host
         self.port = port
@@ -234,28 +234,9 @@ class ClickHouseUtils:
              {ann_return}, {ann_vol}, {sharpe}, {max_dd}, 
              '{description or f"{factor_name} factor analysis results"}')
             """)
-            print(f"Insert to factor_summary DONE")
-            
-            # # Store detailed factor test results
-            # if not factor_test_results.empty:
-            #     for ticker, row in factor_test_results.iterrows():
-            #         beta = float(row.get('Beta', 0.0))
-            #         tstat = float(row.get('T-stat', 0.0))
-            #         pvalue = float(row.get('P-value', 0.0))
-            #         rsquared = float(row.get('R-squared', 0.0))
-            #         conf_int_lower = float(row.get('Conf_Int_Lower', 0.0))
-            #         conf_int_upper = float(row.get('Conf_Int_Upper', 0.0))
-            #
-            #         self.client.execute(f"""
-            #         INSERT INTO {self.database}.factor_details
-            #         (factor_name, factor_type, test_date, ticker, beta, tstat, pvalue, rsquared, conf_int_lower, conf_int_upper)
-            #         VALUES
-            #         ('{factor_name}', '{factor_type}', '{test_date}', '{ticker}', {beta}, {tstat}, {pvalue}, {rsquared}, {conf_int_lower}, {conf_int_upper})
-            #         """)
+            print(f"Insert data into factor_summary table has DONE")
 
-            #Store detailed factor test results
             if not factor_test_results.empty:
-                # 准备批量插入的数据
                 detail_data = []
 
                 for ticker, row in factor_test_results.iterrows():
@@ -271,7 +252,7 @@ class ClickHouseUtils:
                          conf_int_upper)
                     )
 
-                # 执行批量插入
+                # Execute for bulk insert
                 query = f"""
                 INSERT INTO {self.database}.factor_details
                 (factor_name, factor_type, test_date, ticker, beta, tstat, pvalue, rsquared, conf_int_lower, conf_int_upper)
@@ -279,28 +260,13 @@ class ClickHouseUtils:
                 """
                 self.client.execute(query, detail_data)
                 print("Insert into factor_details DONE")
-            
-            # Store time series data
-            # if not portfolio_returns.empty and factor_col in portfolio_returns.columns:
-            #     for date, row in portfolio_returns.iterrows():
-            #         date_str = date.strftime('%Y-%m-%d')
-            #         factor_value = float(row.get(factor_col, 0.0))
-            #         high_return = float(row.get(f'High_{factor_name}', 0.0))
-            #         low_return = float(row.get(f'Low_{factor_name}', 0.0))
-            #
-            #         self.client.execute(f"""
-            #         INSERT INTO {self.database}.factor_timeseries
-            #         (factor_name, factor_type, date, factor_value, high_portfolio_return, low_portfolio_return)
-            #         VALUES
-            #         ('{factor_name}', '{factor_type}', '{date_str}', {factor_value}, {high_return}, {low_return})
-            #         """)
+
             if not portfolio_returns.empty and factor_col in portfolio_returns.columns:
-                # 准备批量插入的数据
                 timeseries_data = []
 
                 for date, row in portfolio_returns.iterrows():
                     #date_str = date.strftime('%Y-%m-%d')
-                    date_str = datetime(date.year, date.month, date.day)
+                    date_str = datetime.today()
                     factor_value = float(row.get(factor_col, 0.0))
                     high_return = float(row.get(f'High_{factor_name}', 0.0))
                     low_return = float(row.get(f'Low_{factor_name}', 0.0))
@@ -309,14 +275,14 @@ class ClickHouseUtils:
                         (factor_name, factor_type, date_str, factor_value, high_return, low_return)
                     )
 
-                # 执行批量插入
+                # Execute for bulk insert
                 query = f"""
                 INSERT INTO {self.database}.factor_timeseries 
                 (factor_name, factor_type, date, factor_value, high_portfolio_return, low_portfolio_return)
                 VALUES
                 """
                 self.client.execute(query, timeseries_data)
-                print(f"Insert to factor_timeseries DONE")
+                print(f"Insert data into factor_timeseries table has DONE")
             
             print(f"Successfully stored {factor_name} factor results")
             return True
