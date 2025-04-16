@@ -6,10 +6,10 @@ import ast
 # load_dotenv()
 
 # ClickHouse configuration
-CLICKHOUSE_HOST = os.getenv('CLICKHOUSE_HOST', '44.222.122.134')
+CLICKHOUSE_HOST = os.getenv('CLICKHOUSE_HOST', 'your_clickhouse_host')
 CLICKHOUSE_PORT = int(os.getenv('CLICKHOUSE_PORT', '9000'))
-CLICKHOUSE_USER = os.getenv('CLICKHOUSE_USER', 'default')
-CLICKHOUSE_PASSWORD = os.getenv('CLICKHOUSE_PASSWORD', 'clickhouse@aws')
+CLICKHOUSE_USER = os.getenv('CLICKHOUSE_USER', 'your_username')
+CLICKHOUSE_PASSWORD = os.getenv('CLICKHOUSE_PASSWORD', 'your_password')
 CLICKHOUSE_DATABASE = os.getenv('CLICKHOUSE_DATABASE', 'factor_model_tick_data_database')
 
 # Factor analysis configuration
