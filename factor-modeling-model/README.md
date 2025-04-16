@@ -132,7 +132,17 @@ The project uses the following tables in ClickHouse:
    pip install -r requirements.txt
    ```
 
-4. Configure environment variables:
+4. Configure the application:
+   - Copy `config_example.py` to `config.py`:
+     ```
+     cp config_example.py config.py
+     ```
+   - Edit `config.py` and update the ClickHouse connection settings:
+     ```python
+     CLICKHOUSE_HOST = 'your_clickhouse_host'
+     CLICKHOUSE_USER = 'your_username'
+     CLICKHOUSE_PASSWORD = 'your_password'
+     ```
    - Copy `.env.example` to `.env` (if not already present)
    - Update the values in `.env` with your database credentials and settings
 
