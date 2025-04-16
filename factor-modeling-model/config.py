@@ -8,16 +8,16 @@ import ast
 # ClickHouse configuration
 CLICKHOUSE_HOST = os.getenv('CLICKHOUSE_HOST', '44.222.122.134')
 CLICKHOUSE_PORT = int(os.getenv('CLICKHOUSE_PORT', '9000'))
-CLICKHOUSE_USER = os.getenv('CLICKHOUSE_USER', 'jacky_user')
-CLICKHOUSE_PASSWORD = os.getenv('CLICKHOUSE_PASSWORD', 'your_secure_password')
-CLICKHOUSE_DATABASE = os.getenv('CLICKHOUSE_DATABASE', 'jacky_database1')
+CLICKHOUSE_USER = os.getenv('CLICKHOUSE_USER', 'default')
+CLICKHOUSE_PASSWORD = os.getenv('CLICKHOUSE_PASSWORD', 'clickhouse@aws')
+CLICKHOUSE_DATABASE = os.getenv('CLICKHOUSE_DATABASE', 'factor_model_tick_data_database')
 
 # Factor analysis configuration
-START_DATE = os.getenv('START_DATE', '2025-01-01')
+START_DATE = os.getenv('START_DATE', '2020-01-01')
 END_DATE = os.getenv('END_DATE', '2025-03-31')
 
 # DJIA tickers
-DJIA_TICKERS_STR = os.getenv('DJIA_TICKERS', 'AAPL,AMGN,AMZN,AXP,BA,CAT')
+DJIA_TICKERS_STR = os.getenv('DJIA_TICKERS', 'AAPL,AMGN,AMZN,AXP,BA,CAT,CRM,CSCO,CVX,DIS,GS,HD,HON,IBM,JNJ,JPM,KO,MCD,MMM,MRK,MSFT,NKE,NVDA,PG,SHW,TRV,UNH,V,VZ,WMT')
 DJIA_TICKERS = DJIA_TICKERS_STR.split(',')
 
 # Strategy configuration - Long-Short Strategy

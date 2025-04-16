@@ -45,26 +45,34 @@ class BaseFactor:
         """
         portfolio_returns = pd.DataFrame(index=returns_df.index)
         
-        for date in returns_df.index:
+        for i, date in enumerate(returns_df.index):
+            #print(f"!!!Processing {self.name} factor with round {i} for date: {date}")
             if date not in factor_df.index or date == returns_df.index[0]:
                 continue
             
             # Get factor values for previous day to avoid look-ahead bias
             prev_dates = factor_df.index[factor_df.index < date]
+            #print(f"!!!Processing prev_dates: {prev_dates} with round{i}")
+
             if len(prev_dates) == 0:
+                #print(f"Skipping date {date}: Not enough stocks ({len(factor_values)}) for {n_groups} groups")
                 continue
                 
             prev_date = prev_dates[-1]
+            #print(f"!!!Processing prev_date: {prev_date} with round{i}")
             factor_values = factor_df.loc[prev_date].dropna()
+            #print(f"!!!Processing factor_values: {factor_values} with round{i}")
+            #print(f"Number of stocks with factor data: {len(factor_values)}")
             
             if len(factor_values) < n_groups:
+                #print(f"Skipping date {date}: Not enough stocks ({len(factor_values)}) for {n_groups} groups")
                 continue
-                
+
             # Sort stocks by factor
             sorted_stocks = factor_values.sort_values(ascending=False)
             
             # Divide into groups
-            group_size = len(sorted_stocks) // n_groups
+            group_size = max(1, len(sorted_stocks) // n_groups)
             
             # High factor group (top group)
             high_factor_stocks = sorted_stocks.iloc[:group_size].index.tolist()

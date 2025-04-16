@@ -2,6 +2,10 @@ import pandas as pd
 import numpy as np
 from factors.base_factor import BaseFactor
 from clickhouse_driver import Client
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import CLICKHOUSE_HOST, CLICKHOUSE_PORT, CLICKHOUSE_USER, CLICKHOUSE_PASSWORD, CLICKHOUSE_DATABASE
+import traceback
 
 class DebtToEquityFactor(BaseFactor):
     """
@@ -14,11 +18,10 @@ class DebtToEquityFactor(BaseFactor):
         super().__init__(
             name="DebtToEquity",
             factor_type="Financial Risk",
-            description="Debt-to-Equity Ratio (Total Debt / Shareholders' Equity). Measures a company's financial leverage."
+            description="Debt-to-Equity Ratio (Total Debt mod Shareholders Equity). Measures a company financial leverage."
         )
         
         # Database configuration for this factor
-        from config import CLICKHOUSE_HOST, CLICKHOUSE_PORT, CLICKHOUSE_USER, CLICKHOUSE_PASSWORD, CLICKHOUSE_DATABASE
         self.db_host = CLICKHOUSE_HOST
         self.db_port = CLICKHOUSE_PORT
         self.db_user = CLICKHOUSE_USER
@@ -61,17 +64,17 @@ class DebtToEquityFactor(BaseFactor):
             ticker_list = "', '".join(tickers)
             
             # Simplified query - directly calculate debt_to_equity_ratio in a single query
-            query = f"""
-            SELECT 
-                ticker,
-                end_date as date,
-                liabilities_current / stockholders_equity as debt_to_equity_ratio
-            FROM {self.db_database}.stock_fundamental_factors_source
-            WHERE ticker IN ('{ticker_list}')
-            AND end_date BETWEEN '{start_date}' AND '{end_date}'
-            AND stockholders_equity != 0  -- Avoid division by zero
-            ORDER BY ticker, date
-            """
+            query = f"""SELECT
+                 ticker,
+                 end_date as date,
+                 liabilities_current / stockholders_equity as debt_to_equity_ratio
+             FROM {self.db_database}.stock_fundamental_factors_source
+             WHERE ticker IN ('{ticker_list}')
+             AND end_date BETWEEN '{start_date}' AND '{end_date}'
+             AND stockholders_equity != 0  -- Avoid division by zero
+             ORDER BY ticker, date
+             """
+
             
             # Execute query
             result = client.execute(query, with_column_types=True)
@@ -88,12 +91,13 @@ class DebtToEquityFactor(BaseFactor):
             
             # Pivot to get tickers as columns
             de_df = data.pivot(index='date', columns='ticker', values='debt_to_equity_ratio')
-            
+            de_df = de_df.reindex(pd.date_range(de_df.index.min(), end_date, freq='D')).ffill()
+
             # Reindex to match all dates in price data
             de_df = de_df.reindex(pd.DatetimeIndex(all_dates))
             
             # Forward fill missing values (use previous day's value)
-            de_df = de_df.fillna(method='ffill')
+            #de_df = de_df.fillna(method='ffill')
             
             # If there are still NaN values (e.g., at the beginning), fill with industry averages or reasonable defaults
             de_df = de_df.fillna(1.0)  # Default debt-to-equity ratio of 1.0
@@ -103,6 +107,7 @@ class DebtToEquityFactor(BaseFactor):
         except Exception as e:
             print(f"Error fetching debt-to-equity data from database: {str(e)}")
             print("Falling back to synthetic data.")
+            print(traceback.format_exc())
             return self._generate_synthetic_data(price_data)
     
     def _generate_synthetic_data(self, price_data):
