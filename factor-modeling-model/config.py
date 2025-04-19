@@ -10,11 +10,11 @@ except ImportError:
 import ast
 
 # ClickHouse configuration
-CLICKHOUSE_HOST = os.getenv('CLICKHOUSE_HOST', '44.222.122.134')
+CLICKHOUSE_HOST = os.getenv('CLICKHOUSE_HOST', 'your-default-host')
 CLICKHOUSE_PORT = int(os.getenv('CLICKHOUSE_PORT', '9000'))
-CLICKHOUSE_USER = os.getenv('CLICKHOUSE_USER', 'default')
-CLICKHOUSE_PASSWORD = os.getenv('CLICKHOUSE_PASSWORD', 'clickhouse@aws')
-CLICKHOUSE_DATABASE = os.getenv('CLICKHOUSE_DATABASE', 'factor_model_tick_data_database')
+CLICKHOUSE_USER = os.getenv('CLICKHOUSE_USER', 'your-default-user')
+CLICKHOUSE_PASSWORD = os.getenv('CLICKHOUSE_PASSWORD', 'your-default-pass')
+CLICKHOUSE_DATABASE = os.getenv('CLICKHOUSE_DATABASE', 'your-default-db')
 
 # Factor analysis configuration
 START_DATE = os.getenv('START_DATE', '2020-01-01')
