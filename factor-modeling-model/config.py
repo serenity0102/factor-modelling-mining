@@ -1,9 +1,13 @@
 import os
-# from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    # Load environment variables from .env file
+    load_dotenv()
+    dotenv_loaded = True
+except ImportError:
+    print("Warning: python-dotenv package not found. Using environment variables directly.")
+    dotenv_loaded = False
 import ast
-
-# Load environment variables from .env file
-# load_dotenv()
 
 # ClickHouse configuration
 CLICKHOUSE_HOST = os.getenv('CLICKHOUSE_HOST', '44.222.122.134')
@@ -50,3 +54,61 @@ if FACTOR_WEIGHTS_STR:
 # Parallel processing
 NUM_PROCESSES = int(os.getenv('NUM_PROCESSES', '4'))
 SPLIT_BY = os.getenv('SPLIT_BY', 'tickers')
+
+def print_config():
+    """Print all configuration values to verify .env loading"""
+    print("\n=== CONFIGURATION VALUES ===\n")
+    
+    if dotenv_loaded:
+        print("✅ .env file loaded successfully")
+    else:
+        print("⚠️ Using environment variables directly (dotenv not loaded)")
+    
+    print("\n=== ClickHouse Configuration ===")
+    print(f"CLICKHOUSE_HOST: {CLICKHOUSE_HOST}")
+    print(f"CLICKHOUSE_PORT: {CLICKHOUSE_PORT}")
+    print(f"CLICKHOUSE_USER: {CLICKHOUSE_USER}")
+    print(f"CLICKHOUSE_PASSWORD: {'*' * len(CLICKHOUSE_PASSWORD)}")  # Masked for security
+    print(f"CLICKHOUSE_DATABASE: {CLICKHOUSE_DATABASE}")
+    
+    print("\n=== Factor Analysis Configuration ===")
+    print(f"START_DATE: {START_DATE}")
+    print(f"END_DATE: {END_DATE}")
+    
+    print("\n=== DJIA Tickers ===")
+    print(f"Number of tickers: {len(DJIA_TICKERS)}")
+    print(f"Tickers: {', '.join(DJIA_TICKERS)}")
+    
+    print("\n=== Long-Short Strategy Configuration ===")
+    print(f"LS_LONG_PCT: {LS_LONG_PCT}")
+    print(f"LS_SHORT_PCT: {LS_SHORT_PCT}")
+    print(f"LS_LONG_ALLOCATION: {LS_LONG_ALLOCATION}")
+    print(f"LS_SHORT_ALLOCATION: {LS_SHORT_ALLOCATION}")
+    
+    print("\n=== Long-Only Strategy Configuration ===")
+    print(f"LO_SELECTION_PCT: {LO_SELECTION_PCT}")
+    print(f"LO_MIN_STOCKS: {LO_MIN_STOCKS}")
+    print(f"LO_EQUAL_WEIGHT: {LO_EQUAL_WEIGHT}")
+    
+    print("\n=== Risk Management ===")
+    print(f"STOP_LOSS: {STOP_LOSS}")
+    print(f"TAKE_PROFIT: {TAKE_PROFIT}")
+    
+    print("\n=== Rebalancing Configuration ===")
+    print(f"REBALANCE_FREQ: {REBALANCE_FREQ}")
+    
+    print("\n=== Factor Weights ===")
+    if FACTOR_WEIGHTS:
+        for factor, weight in FACTOR_WEIGHTS.items():
+            print(f"{factor}: {weight}")
+    else:
+        print("No factor weights defined")
+    
+    print("\n=== Parallel Processing ===")
+    print(f"NUM_PROCESSES: {NUM_PROCESSES}")
+    print(f"SPLIT_BY: {SPLIT_BY}")
+    
+    print("\n=== END CONFIGURATION ===\n")
+
+if __name__ == "__main__":
+    print_config()
