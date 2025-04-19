@@ -20,7 +20,7 @@ from factors.operational_factors import InventoryTurnoverFactor, GrossProfitMarg
 from factors.financial_risk_factors import DebtToEquityFactor, InterestCoverageFactor
 from factors.growth_factors import RevenueGrowthFactor
 from factors.esg_factors import BoardAgeFactor, ExecutiveCompensationFactor, EnvironmentRatingFactor
-from factors.sentiment_factors import AverageSentimentFactor
+from factors.sentiment_factors import NewsSentimentFactor
 
 def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_dir='factor_results'):
     """
@@ -508,7 +508,7 @@ def main():
     env_rating_factor = EnvironmentRatingFactor()
     
     # Initialize sentiment factors
-    sentiment_factor = AverageSentimentFactor()
+    sentiment_factor = NewsSentimentFactor()
     
     # Run factor analysis based on arguments
     factor_arg = args.factor.upper() if args.factor else 'ALL'
@@ -641,7 +641,7 @@ def main():
         print("\n=== Running Average Sentiment Factor Analysis ===")
         sent_results = run_factor_analysis(sentiment_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and sent_results:
-            create_factor_dashboard("AvgSentiment14", "Sentiment", ch_utils, output_dir)
+            create_factor_dashboard("NewsSentiment", "Sentiment", ch_utils, output_dir)
     
     # Create comparison dashboard if requested
     if args.dashboard:
@@ -649,7 +649,7 @@ def main():
             "PEG", "RSI14", "RSI28", "SMB", "HML", "Rm_Rf", "PB", "TradingVolume", 
             "ROC20", "CurrentRatio", "CashRatio", "InventoryTurnover", "GrossProfitMargin",
             "DebtToEquity", "InterestCoverage", "RevenueGrowth", "BoardAge", 
-            "ExecCompToRevenue", "EnvRating", "AvgSentiment14"
+            "ExecCompToRevenue", "EnvRating", "NewsSentiment"
         ]
         create_comparison_dashboard(ch_utils, all_factors, output_dir)
     

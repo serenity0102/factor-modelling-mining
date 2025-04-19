@@ -4,6 +4,7 @@ import json
 import boto3
 from datetime import datetime, timedelta
 import os
+import re
 from factors.base_factor import BaseFactor
 
 class AverageSentimentFactor(BaseFactor):
@@ -250,6 +251,11 @@ class NewsSentimentFactor(BaseFactor):
             sentiment_text = response['output']['message']['content'][0]['text'].strip()
             
             # Convert to float and ensure it's in range [-1, 1]
+            match = re.search(r'(-?\d+\.\d+)', sentiment_text)
+            if match:
+                sentiment_score =  float(match.group(1))
+                return max(min(sentiment_score, 1.0), -1.0)
+
             sentiment_score = float(sentiment_text)
             sentiment_score = max(min(sentiment_score, 1.0), -1.0)
             
