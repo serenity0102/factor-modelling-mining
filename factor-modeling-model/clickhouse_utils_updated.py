@@ -8,19 +8,17 @@ import os
 final_start_date = os.getenv('START_DATE', '2020-01-01')
 final_end_date = os.getenv('END_DATE', '2020-12-31')
 
-
 class ClickHouseUtils:
     """Utility class for ClickHouse operations"""
-
-    def __init__(self, host='44.222.122.134', port=9000, user='user', password='password',
-                 database='factor_model_tick_data_database'):
+    
+    def __init__(self, host='44.222.122.134', port=9000, user='user', password='password', database='factor_model_tick_data_database'):
         """Initialize ClickHouse connection"""
         self.host = host
         self.port = port
         self.user = user
         self.password = password
         self.database = database
-
+        
         try:
             self.client = Client(
                 host=self.host,
@@ -34,13 +32,13 @@ class ClickHouseUtils:
             print(f"Error connecting to ClickHouse: {str(e)}")
             print(traceback.format_exc())
             self.client = None
-
+    
     def close(self):
         """Close ClickHouse connection"""
         if self.client:
             self.client = None
             print("ClickHouse connection closed")
-
+    
     def create_factor_tables(self):
         """Create tables for storing factor analysis results"""
         try:
@@ -66,7 +64,7 @@ class ClickHouseUtils:
             ) ENGINE = MergeTree()
             ORDER BY (factor_type, factor_name, test_date)
             """)
-
+            
             # Create factor_details table
             self.client.execute(f"""
             CREATE TABLE IF NOT EXISTS {self.database}.factor_details (
@@ -98,7 +96,7 @@ class ClickHouseUtils:
             ) ENGINE = MergeTree()
             ORDER BY (factor_name, factor_type, date)
             """)
-
+            
             # Create factor_values table for storing raw factor values
             self.client.execute(f"""
             CREATE TABLE IF NOT EXISTS {self.database}.factor_values (
@@ -112,6 +110,7 @@ class ClickHouseUtils:
             ORDER BY (factor_type, factor_name, ticker, date)
             """)
 
+            
             # Create temporary table for stock returns
             self.client.execute(f"""
             CREATE TABLE IF NOT EXISTS {self.database}.temp_stock_returns (
@@ -122,10 +121,10 @@ class ClickHouseUtils:
             ) ENGINE = MergeTree()
             ORDER BY (ticker, date)
             """)
-
+            
             print("Factor tables created successfully")
             return True
-
+            
         except Exception as e:
             print(f"Error creating factor tables: {str(e)}")
             print(traceback.format_exc())
@@ -207,14 +206,12 @@ class ClickHouseUtils:
             avg_tstat = float(factor_test_results['T-stat'].mean()) if 'T-stat' in factor_test_results else 0.0
             avg_rsquared = float(factor_test_results['R-squared'].mean()) if 'R-squared' in factor_test_results else 0.0
 
-            significant_stocks = int(
-                (abs(factor_test_results['T-stat']) > 1.96).sum()) if 'T-stat' in factor_test_results else 0
+            significant_stocks = int((abs(factor_test_results['T-stat']) > 1.96).sum()) if 'T-stat' in factor_test_results else 0
             total_stocks = len(factor_test_results) if not factor_test_results.empty else 0
 
             # Get performance metrics
             factor_col = f'{factor_name}_Factor'
-            if not performance_results.empty and 'Annualized Return' in performance_results and factor_col in \
-                    performance_results['Annualized Return']:
+            if not performance_results.empty and 'Annualized Return' in performance_results and factor_col in performance_results['Annualized Return']:
                 ann_return = float(performance_results['Annualized Return'][factor_col])
                 ann_vol = float(performance_results['Annualized Volatility'][factor_col])
                 sharpe = float(performance_results['Sharpe Ratio'][factor_col])
@@ -239,7 +236,7 @@ class ClickHouseUtils:
             """)
             print(f"Insert data into factor_summary table has DONE")
             return True
-
+            
         except Exception as e:
             print(f"Error storing factor summary: {str(e)}")
             print(traceback.format_exc())
@@ -248,23 +245,23 @@ class ClickHouseUtils:
     def store_stock_returns(self, returns_df):
         """
         Store stock returns data to ClickHouse
-
+        
         Parameters:
         - returns_df: DataFrame with stock returns (index=dates, columns=tickers)
-
+        
         Returns:
         - success: Boolean indicating if operation was successful
         """
         try:
             print("Storing stock returns data to ClickHouse...")
-
+            
             if returns_df.empty:
                 print("Empty returns DataFrame provided")
                 return False
-
+            
             # Get list of unique tickers in the data
             tickers = returns_df.columns.tolist()
-
+            
             # Prepare data for insertion - store all data without filtering
             data = []
             for date in returns_df.index:
@@ -277,26 +274,26 @@ class ClickHouseUtils:
                             float(return_value),
                             datetime.now()  # Add update_time for tracking latest records
                         ))
-
+            
             if not data:
                 print("No stock return data to store")
                 return False
-
+            
             print(f"Inserting {len(data)} stock return records")
-
+            
             # Insert data in batches to avoid memory issues
             batch_size = 50000
             for i in range(0, len(data), batch_size):
-                batch_data = data[i:i + batch_size]
+                batch_data = data[i:i+batch_size]
                 self.client.execute(
                     f"INSERT INTO {self.database}.temp_stock_returns "
                     "(ticker, date, return_value, update_time) VALUES",
                     batch_data
                 )
-
+            
             print(f"Successfully stored {len(data)} stock return records")
             return True
-
+            
         except Exception as e:
             print(f"Error storing stock returns: {str(e)}")
             print(traceback.format_exc())
@@ -364,7 +361,7 @@ class ClickHouseUtils:
         """
         try:
             print(f"Storing {factor_name} factor test results in ClickHouse...")
-
+            
             # Check if factor_test_results is empty based on its type
             if isinstance(factor_test_results, dict) and not factor_test_results:
                 print(f"No test results to store for {factor_name}")
@@ -372,7 +369,7 @@ class ClickHouseUtils:
             elif hasattr(factor_test_results, 'empty') and factor_test_results.empty:
                 print(f"No test results to store for {factor_name}")
                 return False
-
+                
             test_date = datetime.today()
             detail_data = []
 
@@ -385,7 +382,7 @@ class ClickHouseUtils:
                     rsquared = float(row.get('R-squared', 0.0))
                     conf_int_lower = float(row.get('Conf_Int_Lower', 0.0))
                     conf_int_upper = float(row.get('Conf_Int_Upper', 0.0))
-
+                    
                     # Data for factor_details table
                     detail_data.append(
                         (factor_name, factor_type, test_date, ticker, beta, tstat, pvalue, rsquared, conf_int_lower,
@@ -400,7 +397,7 @@ class ClickHouseUtils:
                     rsquared = float(row.get('R-squared', 0.0))
                     conf_int_lower = float(row.get('Conf_Int_Lower', 0.0))
                     conf_int_upper = float(row.get('Conf_Int_Upper', 0.0))
-
+                    
                     # Data for factor_details table
                     detail_data.append(
                         (factor_name, factor_type, test_date, ticker, beta, tstat, pvalue, rsquared, conf_int_lower,
@@ -415,9 +412,9 @@ class ClickHouseUtils:
             """
             self.client.execute(query, detail_data)
             print("Insert into factor_details DONE")
-
+            
             return True
-
+            
         except Exception as e:
             print(f"Error storing factor test results: {str(e)}")
             print(traceback.format_exc())
@@ -447,49 +444,49 @@ class ClickHouseUtils:
             FROM factor_summary
             ORDER BY factor_type, sharpe_ratio DESC
             """
-
+            
             result = self.client.execute(query, with_column_types=True)
             columns = [col[0] for col in result[1]]
             df = pd.DataFrame(result[0], columns=columns)
-
+            
             return df
-
+            
         except Exception as e:
             print(f"Error getting factors: {str(e)}")
             print(traceback.format_exc())
             return pd.DataFrame()
-
+    
     def get_factor_details(self, factor_name, tickers=None, factor_type=None, start_date=None, end_date=None):
         """
         Get detailed results for a specific factor
-
+        
         Parameters:
         - factor_name: Name of the factor
         - tickers: List of tickers to filter (optional)
         - factor_type: Type of factor (optional)
         - start_date: Start date (optional, format: YYYY-MM-DD)
         - end_date: End date (optional, format: YYYY-MM-DD)
-
+        
         Returns:
         - DataFrame with factor details
         """
         try:
             # Build query conditions
             conditions = [f"factor_name = '{factor_name}'"]
-
+            
             if factor_type:
                 conditions.append(f"factor_type = '{factor_type}'")
-
+                
             if start_date:
                 conditions.append(f"test_date >= '{start_date}'")
-
+            
             if end_date:
                 conditions.append(f"test_date <= '{end_date}'")
-
+            
             if tickers:
                 ticker_list = "', '".join(tickers)
                 conditions.append(f"ticker IN ('{ticker_list}')")
-
+            
             # Build complete query with latest update_time
             where_clause = " AND ".join(conditions)
             query = f"""
@@ -520,87 +517,87 @@ class ClickHouseUtils:
             WHERE {where_clause}
             ORDER BY fd.ticker
             """
-
+            
             # Execute query
             result = self.client.execute(query, with_column_types=True)
             columns = [col[0] for col in result[1]]
             details = pd.DataFrame(result[0], columns=columns)
-
+            
             if details.empty:
                 print(f"No factor details found for {factor_name}")
             else:
                 print(f"Successfully retrieved factor details for {factor_name} with {len(details)} records")
-
+                
             return details
-
+            
         except Exception as e:
             print(f"Error getting factor details: {str(e)}")
             print(traceback.format_exc())
             return pd.DataFrame()
-
+    
     def get_factor_values(self, factor_name, factor_type, start_date=None, end_date=None):
         """Get raw factor values for a specific factor"""
         try:
             where_clauses = [f"factor_name = '{factor_name}'", f"factor_type = '{factor_type}'"]
-
+            
             if start_date:
                 where_clauses.append(f"date >= '{start_date}'")
-
+            
             if end_date:
                 where_clauses.append(f"date <= '{end_date}'")
-
+            
             where_clause = f"WHERE {' AND '.join(where_clauses)}"
-
+            
             query = f"""
             SELECT ticker, date, value
             FROM factor_values
             {where_clause}
             ORDER BY ticker, date
             """
-
+            
             result = self.client.execute(query, with_column_types=True)
             columns = [col[0] for col in result[1]]
             df = pd.DataFrame(result[0], columns=columns)
-
+            
             if not df.empty:
                 df['date'] = pd.to_datetime(df['date'])
                 # Pivot to get tickers as columns
                 pivot_df = df.pivot(index='date', columns='ticker', values='value')
                 return pivot_df
-
+            
             return pd.DataFrame()
-
+            
         except Exception as e:
             print(f"Error getting factor values: {str(e)}")
             print(traceback.format_exc())
             return pd.DataFrame()
-
+    
     def get_stock_returns(self, tickers=None, start_date=None, end_date=None):
         """
         Retrieve stock returns data from ClickHouse
-
+        
         Parameters:
         - tickers: List of stock tickers (optional)
         - start_date: Start date (optional, format: YYYY-MM-DD)
         - end_date: End date (optional, format: YYYY-MM-DD)
-
+        
         Returns:
         - DataFrame: Stock returns data (index=dates, columns=tickers)
         """
         try:
             # Build query conditions
             conditions = []
-
+            
             if tickers:
                 ticker_list = "', '".join(tickers)
                 conditions.append(f"ticker IN ('{ticker_list}')")
 
             if start_date:
                 conditions.append(f"date >= '{start_date}'")
-
+            
             if end_date:
                 conditions.append(f"date <= '{end_date}'")
-
+            
             # Build complete query with latest update_time
             where_clause = " AND ".join(conditions) if conditions else "1=1"
             query = f"""
@@ -623,40 +620,40 @@ class ClickHouseUtils:
             WHERE {where_clause}
             ORDER BY sr.date, sr.ticker
             """
-
+            
             # Execute query
             result = self.client.execute(query, with_column_types=True)
             columns = [col[0] for col in result[1]]
             df = pd.DataFrame(result[0], columns=columns)
-
+            
             if df.empty:
                 print("No stock return data found")
                 return pd.DataFrame()
-
+            
             # Convert date to datetime
             df['date'] = pd.to_datetime(df['date'])
-
+            
             # Pivot table to get desired format
             pivot_df = df.pivot(index='date', columns='ticker', values='return_value')
-
+            
             print(f"Successfully retrieved stock returns for {len(pivot_df)} days and {len(pivot_df.columns)} stocks")
             return pivot_df
-
+            
         except Exception as e:
             print(f"Error retrieving stock returns: {str(e)}")
             print(traceback.format_exc())
             return pd.DataFrame()
 
-    def get_portfolio_returns(self, factor_name, tickers, factor_type=None, start_date=None, end_date=None):
+    def get_portfolio_returns(self, factor_name, tickers, factor_type = None, start_date=None, end_date=None):
         """
         Retrieve portfolio returns data from ClickHouse factor_timeseries table
-
+        
         Parameters:
         - factor_name: Name of the factor
         - start_date: Start date (optional, format: YYYY-MM-DD)
         - end_date: End date (optional, format: YYYY-MM-DD)
         - tickers: List of tickers to filter factor values (optional)
-
+        
         Returns:
         - DataFrame: Portfolio returns data
         """
@@ -667,13 +664,13 @@ class ClickHouseUtils:
 
             if start_date:
                 conditions.append(f"date >= '{start_date}'")
-
+            
             if end_date:
                 conditions.append(f"date <= '{end_date}'")
 
             if factor_type:
                 conditions.append(f"factor_type = '{factor_type}'")
-
+            
             # Build complete query
             where_clause = " AND ".join(conditions)
             query = f"""
@@ -697,46 +694,46 @@ class ClickHouseUtils:
             WHERE {where_clause}
             ORDER BY ft.date
             """
-
+            
             # Execute query
             result = self.client.execute(query, with_column_types=True)
             columns = [col[0] for col in result[1]]
             df = pd.DataFrame(result[0], columns=columns)
-
+            
             if df.empty:
                 print(f"No portfolio return data found for {factor_name}")
                 return pd.DataFrame()
-
+            
             # Convert date to datetime and set as index
             df['date'] = pd.to_datetime(df['date'])
             df.set_index('date', inplace=True)
-
+            
             # Rename columns to match expected format
             df.rename(columns={
                 'high_portfolio_return': f'High_{factor_name}',
                 'low_portfolio_return': f'Low_{factor_name}',
                 'factor_value': f'{factor_name}_Factor'
             }, inplace=True)
-
+            
             # If tickers are provided, get factor values for these tickers
             if tickers and len(tickers) > 0:
                 # Get factor values for specific tickers
                 factor_values = self.get_factor_values(factor_name, factor_type, start_date, end_date)
-
+                
                 if not factor_values.empty:
                     # Filter for requested tickers
                     available_tickers = [t for t in tickers if t in factor_values.columns]
-
+                    
                     if available_tickers:
                         ticker_values = factor_values[available_tickers]
-
+                        
                         # Add ticker-specific factor values to the result
                         for ticker in available_tickers:
                             df[ticker] = ticker_values[ticker]
-
+            
             print(f"Successfully retrieved {len(df)} {factor_name} portfolio return records")
             return df
-
+            
         except Exception as e:
             print(f"Error retrieving portfolio returns: {str(e)}")
             print(traceback.format_exc())
@@ -801,33 +798,33 @@ class ClickHouseUtils:
         """Delete a factor from all tables"""
         try:
             print(f"Deleting factor: {factor_name}, type: {factor_type}")
-
+            
             where_clauses = [f"factor_name = '{factor_name}'", f"factor_type = '{factor_type}'"]
-
+            
             if test_date:
                 where_clauses.append(f"test_date = '{test_date}'")
-
+            
             where_clause = f"WHERE {' AND '.join(where_clauses)}"
-
+            
             # Delete from factor_summary
             self.client.execute(f"DELETE FROM {self.database}.factor_summary {where_clause}")
-
+            
             # Delete from factor_details
             self.client.execute(f"DELETE FROM {self.database}.factor_details {where_clause}")
-
+            
             # Delete from factor_test_results
             self.client.execute(f"DELETE FROM {self.database}.factor_test_results {where_clause}")
-
+            
             # Delete from factor_timeseries (no test_date column)
             where_clause_ts = f"WHERE factor_name = '{factor_name}' AND factor_type = '{factor_type}'"
             self.client.execute(f"DELETE FROM {self.database}.factor_timeseries {where_clause_ts}")
-
+            
             # Delete from factor_values (no test_date column)
             self.client.execute(f"DELETE FROM {self.database}.factor_values {where_clause_ts}")
-
+            
             print(f"Successfully deleted factor: {factor_name}, type: {factor_type}")
             return True
-
+            
         except Exception as e:
             print(f"Error deleting factor: {str(e)}")
             print(traceback.format_exc())

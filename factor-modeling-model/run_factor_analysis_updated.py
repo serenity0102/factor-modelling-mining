@@ -22,27 +22,26 @@ from factors.growth_factors import RevenueGrowthFactor
 from factors.esg_factors import BoardAgeFactor, ExecutiveCompensationFactor, EnvironmentRatingFactor
 from factors.sentiment_factors import AverageSentimentFactor
 
-
 def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_dir='factor_results'):
     """
     Run factor analysis using the provided factor object
-
+    
     Parameters:
     - factor_obj: Factor object (instance of BaseFactor subclass)
     - start_date: Start date for analysis (YYYY-MM-DD)
     - end_date: End date for analysis (YYYY-MM-DD)
     - tickers: List of stock tickers to analyze (default: None, uses DJIA_TICKERS)
     - output_dir: Directory to store output files
-
+    
     Returns:
     - Results dictionary
     """
     try:
         print(f"Running {factor_obj.name} factor analysis from {start_date} to {end_date}...")
-
+        
         # Use provided tickers or default to DJIA_TICKERS
         tickers = tickers or DJIA_TICKERS
-
+        
         # Create ClickHouse utils
         ch_utils = ClickHouseUtils(
             host=CLICKHOUSE_HOST,
@@ -51,15 +50,15 @@ def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_d
             password=CLICKHOUSE_PASSWORD,
             database=CLICKHOUSE_DATABASE
         )
-
+        
         # Fetch stock price data
         print(f"Fetching stock data for {len(tickers)} symbols...")
         price_data = {}
-
+        
         # Convert dates to ClickHouse format
         start_date_formatted = f"{start_date} 00:00:00"
         end_date_formatted = f"{end_date} 23:59:59"
-
+        
         for symbol in tickers:
             try:
                 # Query to get daily OHLCV data
@@ -79,50 +78,50 @@ def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_d
                 GROUP BY symbol, toDate(timestamp)
                 ORDER BY date
                 """
-
+                
                 # Execute query
                 data = ch_utils.client.execute(query, with_column_types=True)
-
+                
                 # Convert to DataFrame
                 columns = [col[0] for col in data[1]]
                 df = pd.DataFrame(data[0], columns=columns)
-
+                
                 # Convert date to datetime
                 df['date'] = pd.to_datetime(df['date'])
-
+                
                 # Set date as index
                 df.set_index('date', inplace=True)
-
+                
                 # Store in result dictionary
                 price_data[symbol] = df
-
+                
                 print(f"Fetched {len(df)} days of data for {symbol}")
-
+                
             except Exception as e:
                 print(f"Error fetching data for {symbol}: {str(e)}")
-
+        
         # Generate market cap data (mock data for now)
         print("Generating market cap data...")
         all_dates = set()
         for symbol in tickers:
             if symbol in price_data:
                 all_dates.update(price_data[symbol].index)
-
+        
         all_dates = sorted(list(all_dates))
         market_cap_df = pd.DataFrame(index=all_dates)
-
+        
         # Generate market cap for each stock
         for symbol in tickers:
             if symbol in price_data:
                 # Generate random shares outstanding (between 1B and 10B)
                 shares_outstanding = np.random.uniform(1e9, 10e9)
-
+                
                 # Calculate market cap as price * shares outstanding
                 market_cap = price_data[symbol]['adjusted_close'] * shares_outstanding
-
+                
                 # Add to DataFrame
                 market_cap_df[symbol] = market_cap
-
+        
         # For PEG factor, we need additional fundamental data
         additional_data = None
         if factor_obj.name == "PEG":
@@ -130,7 +129,7 @@ def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_d
             print("Generating fundamental data for PEG factor...")
             pe_df = pd.DataFrame(index=all_dates)
             growth_df = pd.DataFrame(index=all_dates)
-
+            
             # Generate data for each stock
             for symbol in tickers:
                 if symbol in price_data:
@@ -141,7 +140,7 @@ def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_d
                     pe_series = base_pe * (1 + pe_changes).cumprod()
                     pe_series = np.clip(pe_series, 5, 100)  # Keep P/E ratios in reasonable range
                     pe_df[symbol] = pe_series
-
+                    
                     # Generate growth rates (varying over time)
                     base_growth = np.random.uniform(0.05, 0.25)
                     growth_volatility = np.random.uniform(0.002, 0.01)
@@ -149,12 +148,12 @@ def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_d
                     growth_series = base_growth * (1 + growth_changes).cumprod()
                     growth_series = np.clip(growth_series, 0.01, 0.5)
                     growth_df[symbol] = growth_series
-
+            
             additional_data = {
                 'pe_ratios': pe_df,
                 'growth_rates': growth_df
             }
-
+        
         # Batch 1: Run factor analysis to get factor_values, df_returns, portfolio_returns
         # results = factor_obj.analyze(price_data, market_cap_df, additional_data, output_dir)
         calculated_results = factor_obj.analyze_calculate_construct(price_data, market_cap_df, additional_data)
@@ -172,8 +171,7 @@ def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_d
         # Batch 2: Run factor testing to get factor_test_results
         tickers = tickers or DJIA_TICKERS
         returns_df = ch_utils.get_stock_returns(tickers=tickers, start_date=start_date, end_date=end_date)
-        portfolio_returns = ch_utils.get_portfolio_returns(factor_name=factor_obj.name, tickers=tickers,
-                                                           start_date=start_date, end_date=end_date)
+        portfolio_returns = ch_utils.get_portfolio_returns(factor_name=factor_obj.name, tickers = tickers, start_date=start_date, end_date=end_date)
         test_results = factor_obj.analyze_test_factor(returns_df, portfolio_returns, output_dir='factor_dashboard')
 
         if test_results:
@@ -184,12 +182,9 @@ def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_d
             )
 
         # Bacht 3: save factor_test_results and performance_results to factor_summary table
-        portfolio_returns = ch_utils.get_portfolio_returns(factor_name=factor_obj.name, tickers=DJIA_TICKERS,
-                                                           start_date=start_date, end_date=end_date)
-        factor_test_results = ch_utils.get_factor_details(factor_name=factor_obj.name, tickers=DJIA_TICKERS,
-                                                          start_date=start_date, end_date=end_date)
-        results = factor_obj.analyze_evaluate_portfolio(factor_test_results, portfolio_returns,
-                                                        output_dir='factor_dashboard')
+        portfolio_returns = ch_utils.get_portfolio_returns(factor_name=factor_obj.name, tickers = DJIA_TICKERS, start_date=start_date, end_date=end_date)
+        factor_test_results = ch_utils.get_factor_details(factor_name=factor_obj.name, tickers = DJIA_TICKERS, start_date=start_date, end_date=end_date)
+        results = factor_obj.analyze_evaluate_portfolio(factor_test_results, portfolio_returns, output_dir='factor_dashboard')
 
         # Store results in ClickHouse factor_test_results table
         if results:
@@ -202,48 +197,47 @@ def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_d
                 end_date=end_date,
                 description=factor_obj.description
             )
-
+            
             print(f"{factor_obj.name} factor analysis completed successfully.")
-
+        
         return results
-
+        
     except Exception as e:
         print(f"Error in {factor_obj.name} factor analysis: {str(e)}")
         print(traceback.format_exc())
         return None
 
-
 def create_factor_dashboard(factor_name, factor_type, ch_utils, output_dir='factor_dashboard'):
     """Create a dashboard for factor analysis results"""
     try:
         print(f"Creating dashboard for factor: {factor_name}...")
-
+        
         # Get latest test date
         test_dates = ch_utils.client.execute(f"""
         SELECT test_date FROM {CLICKHOUSE_DATABASE}.factor_summary 
         WHERE factor_name = '{factor_name}' AND factor_type = '{factor_type}'
         ORDER BY test_date DESC LIMIT 1
         """)
-
+        
         if not test_dates:
             print(f"No data found for factor: {factor_name}")
             return
-
+            
         test_date = test_dates[0][0]
-
+        
         # Get factor details
         factor_data = ch_utils.get_factor_details(factor_name, factor_type, test_date)
-
+        
         if not factor_data['summary'].empty:
             summary = factor_data['summary']
             details = factor_data['details']
             timeseries = factor_data['timeseries']
-
+            
             # Create output directory
             os.makedirs(output_dir, exist_ok=True)
             dashboard_dir = os.path.join(output_dir, 'dashboard')
             os.makedirs(dashboard_dir, exist_ok=True)
-
+            
             # Create dashboard HTML
             html_content = f"""
             <!DOCTYPE html>
@@ -268,7 +262,7 @@ def create_factor_dashboard(factor_name, factor_type, ch_utils, output_dir='fact
                     <p>Test Date: {test_date}</p>
                     <p>Date Range: {summary['start_date'].iloc[0]} to {summary['end_date'].iloc[0]}</p>
                 </div>
-
+                
                 <div class="section">
                     <h2>Summary Statistics</h2>
                     <table>
@@ -310,14 +304,14 @@ def create_factor_dashboard(factor_name, factor_type, ch_utils, output_dir='fact
                         </tr>
                     </table>
                 </div>
-
+                
                 <div class="section">
                     <h2>Factor Performance</h2>
                     <div class="chart">
                         <img src="../{factor_name.lower()}_factor_cumulative_returns_real_data.png" width="100%">
                     </div>
                 </div>
-
+                
                 <div class="section">
                     <h2>Factor Statistics</h2>
                     <div class="chart">
@@ -325,7 +319,7 @@ def create_factor_dashboard(factor_name, factor_type, ch_utils, output_dir='fact
                     </div>
                 </div>
             """
-
+            
             # Add stock-level results if available
             if not details.empty:
                 html_content += """
@@ -341,7 +335,7 @@ def create_factor_dashboard(factor_name, factor_type, ch_utils, output_dir='fact
                             <th>95% Confidence Interval</th>
                         </tr>
                 """
-
+                
                 # Add rows for each stock
                 for _, row in details.iterrows():
                     html_content += f"""
@@ -354,47 +348,46 @@ def create_factor_dashboard(factor_name, factor_type, ch_utils, output_dir='fact
                             <td>[{row['conf_int_lower']:.4f}, {row['conf_int_upper']:.4f}]</td>
                         </tr>
                     """
-
+                
                 html_content += """
                     </table>
                 </div>
                 """
-
+            
             html_content += """
             </body>
             </html>
             """
-
+            
             # Write HTML to file
             with open(f'{dashboard_dir}/{factor_name.lower()}_factor_dashboard.html', 'w') as f:
                 f.write(html_content)
-
+            
             print(f"Dashboard created at: {dashboard_dir}/{factor_name.lower()}_factor_dashboard.html")
         else:
             print(f"No summary data found for factor: {factor_name}")
-
+            
     except Exception as e:
         print(f"Error creating dashboard: {str(e)}")
         print(traceback.format_exc())
-
 
 def create_comparison_dashboard(ch_utils, factor_names=None, output_dir='factor_dashboard'):
     """Create a dashboard comparing multiple factors"""
     try:
         print("Creating factor comparison dashboard...")
-
+        
         # Get comparison data
         comparison_data = ch_utils.compare_factors(factor_names)
-
+        
         if comparison_data.empty:
             print("No factor data found for comparison")
             return
-
+        
         # Create output directory
         os.makedirs(output_dir, exist_ok=True)
         dashboard_dir = os.path.join(output_dir, 'dashboard')
         os.makedirs(dashboard_dir, exist_ok=True)
-
+        
         # Create dashboard HTML
         html_content = """
         <!DOCTYPE html>
@@ -417,7 +410,7 @@ def create_comparison_dashboard(ch_utils, factor_names=None, output_dir='factor_
                 <h1>Factor Comparison Dashboard</h1>
                 <p>Comparison of factor performance metrics</p>
             </div>
-
+            
             <div class="section">
                 <h2>Factor Performance Comparison</h2>
                 <table>
@@ -432,7 +425,7 @@ def create_comparison_dashboard(ch_utils, factor_names=None, output_dir='factor_
                         <th>Significant Stocks</th>
                     </tr>
         """
-
+        
         # Add rows for each factor
         for _, row in comparison_data.iterrows():
             html_content += f"""
@@ -447,11 +440,11 @@ def create_comparison_dashboard(ch_utils, factor_names=None, output_dir='factor_
                     <td>{row['significant_stocks']} / {row['total_stocks']}</td>
                 </tr>
             """
-
+        
         html_content += """
                 </table>
             </div>
-
+            
             <div class="section">
                 <h2>Factor Comparison Charts</h2>
                 <div class="chart">
@@ -461,17 +454,16 @@ def create_comparison_dashboard(ch_utils, factor_names=None, output_dir='factor_
         </body>
         </html>
         """
-
+        
         # Write HTML to file
         with open(f'{dashboard_dir}/factor_comparison_dashboard.html', 'w') as f:
             f.write(html_content)
-
+        
         print(f"Comparison dashboard created at: {dashboard_dir}/factor_comparison_dashboard.html")
-
+        
     except Exception as e:
         print(f"Error creating comparison dashboard: {str(e)}")
         print(traceback.format_exc())
-
 
 def main():
     """Main function to run factor analysis"""
@@ -481,9 +473,9 @@ def main():
     parser.add_argument('--end-date', type=str, default=END_DATE, help='End date (YYYY-MM-DD)')
     parser.add_argument('--dashboard', action='store_true', help='Generate dashboards')
     parser.add_argument('--output-dir', type=str, default='factor_results', help='Directory to store output files')
-
+    
     args = parser.parse_args()
-
+    
     # Create ClickHouse utils
     ch_utils = ClickHouseUtils(
         host=CLICKHOUSE_HOST,
@@ -492,203 +484,200 @@ def main():
         password=CLICKHOUSE_PASSWORD,
         database=CLICKHOUSE_DATABASE
     )
-
+    
     # Create output directory
     output_dir = args.output_dir
     os.makedirs(output_dir, exist_ok=True)
-
+    
     # Create factor tables if they don't exist
     ch_utils.create_factor_tables()
-
+    
     # Initialize factors
     peg_factor = PEGFactor()
     rsi14_factor = RSIFactor(window=14)
     rsi28_factor = RSIFactor(window=28)
-
+    
     # Initialize Fama-French factors
     smb_factor = SMBFactor()
     hml_factor = HMLFactor()
     market_factor = MarketFactor()
-
+    
     # Initialize valuation factors
     pb_factor = PBFactor()
-
+    
     # Initialize liquidity factors
     volume_factor = TradingVolumeFactor()
-
+    
     # Initialize technical factors
     roc_factor = ROCFactor(window=20)
-
+    
     # Initialize financial health factors
     current_ratio_factor = CurrentRatioFactor()
     cash_ratio_factor = CashRatioFactor()
-
+    
     # Initialize operational factors
     inventory_turnover_factor = InventoryTurnoverFactor()
     gross_margin_factor = GrossProfitMarginFactor()
-
+    
     # Initialize financial risk factors
     debt_equity_factor = DebtToEquityFactor()
     interest_coverage_factor = InterestCoverageFactor()
-
+    
     # Initialize growth factors
     revenue_growth_factor = RevenueGrowthFactor()
-
+    
     # Initialize ESG factors
     board_age_factor = BoardAgeFactor()
     exec_comp_factor = ExecutiveCompensationFactor()
     env_rating_factor = EnvironmentRatingFactor()
-
+    
     # Initialize sentiment factors
     sentiment_factor = AverageSentimentFactor()
-
+    
     # Run factor analysis based on arguments
     factor_arg = args.factor.upper() if args.factor else 'ALL'
-
+    
     if factor_arg == 'PEG' or factor_arg == 'ALL':
         print("\n=== Running PEG Factor Analysis ===")
         peg_results = run_factor_analysis(peg_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and peg_results:
             create_factor_dashboard("PEG", "Fundamental", ch_utils, output_dir)
-
+    
     if factor_arg == 'RSI14' or factor_arg == 'ALL':
         print("\n=== Running RSI14 Factor Analysis ===")
         rsi14_results = run_factor_analysis(rsi14_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and rsi14_results:
             create_factor_dashboard("RSI14", "Technical", ch_utils, output_dir)
-
+    
     if factor_arg == 'RSI28' or factor_arg == 'ALL':
         print("\n=== Running RSI28 Factor Analysis ===")
         rsi28_results = run_factor_analysis(rsi28_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and rsi28_results:
             create_factor_dashboard("RSI28", "Technical", ch_utils, output_dir)
-
+            
     # Fama-French factors
     if factor_arg == 'SMB' or factor_arg == 'ALL':
         print("\n=== Running SMB Factor Analysis ===")
         smb_results = run_factor_analysis(smb_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and smb_results:
             create_factor_dashboard("SMB", "Fama-French", ch_utils, output_dir)
-
+            
     if factor_arg == 'HML' or factor_arg == 'ALL':
         print("\n=== Running HML Factor Analysis ===")
         hml_results = run_factor_analysis(hml_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and hml_results:
             create_factor_dashboard("HML", "Fama-French", ch_utils, output_dir)
-
+            
     if factor_arg == 'MARKET' or factor_arg == 'ALL':
         print("\n=== Running Market Factor Analysis ===")
         market_results = run_factor_analysis(market_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and market_results:
             create_factor_dashboard("Rm_Rf", "Fama-French", ch_utils, output_dir)
-
+            
     # Valuation factors
     if factor_arg == 'PB' or factor_arg == 'ALL':
         print("\n=== Running PB Factor Analysis ===")
         pb_results = run_factor_analysis(pb_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and pb_results:
             create_factor_dashboard("PB", "Valuation", ch_utils, output_dir)
-
+            
     # Liquidity factors
     if factor_arg == 'VOLUME' or factor_arg == 'ALL':
         print("\n=== Running Trading Volume Factor Analysis ===")
         volume_results = run_factor_analysis(volume_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and volume_results:
             create_factor_dashboard("TradingVolume", "Liquidity", ch_utils, output_dir)
-
+            
     # Technical factors
     if factor_arg == 'ROC' or factor_arg == 'ALL':
         print("\n=== Running ROC Factor Analysis ===")
         roc_results = run_factor_analysis(roc_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and roc_results:
             create_factor_dashboard("ROC20", "Technical", ch_utils, output_dir)
-
+            
     # Financial health factors
     if factor_arg == 'CR' or factor_arg == 'ALL':
         print("\n=== Running Current Ratio Factor Analysis ===")
         cr_results = run_factor_analysis(current_ratio_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and cr_results:
             create_factor_dashboard("CurrentRatio", "Financial Health", ch_utils, output_dir)
-
+            
     if factor_arg == 'CASH' or factor_arg == 'ALL':
         print("\n=== Running Cash Ratio Factor Analysis ===")
         cash_results = run_factor_analysis(cash_ratio_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and cash_results:
             create_factor_dashboard("CashRatio", "Financial Health", ch_utils, output_dir)
-
+            
     # Operational factors
     if factor_arg == 'IT' or factor_arg == 'ALL':
         print("\n=== Running Inventory Turnover Factor Analysis ===")
-        it_results = run_factor_analysis(inventory_turnover_factor, args.start_date, args.end_date,
-                                         output_dir=output_dir)
+        it_results = run_factor_analysis(inventory_turnover_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and it_results:
             create_factor_dashboard("InventoryTurnover", "Operational", ch_utils, output_dir)
-
+            
     if factor_arg == 'GPM' or factor_arg == 'ALL':
         print("\n=== Running Gross Profit Margin Factor Analysis ===")
         gpm_results = run_factor_analysis(gross_margin_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and gpm_results:
             create_factor_dashboard("GrossProfitMargin", "Operational", ch_utils, output_dir)
-
+            
     # Financial risk factors
     if factor_arg == 'DE' or factor_arg == 'ALL':
         print("\n=== Running Debt-to-Equity Factor Analysis ===")
         de_results = run_factor_analysis(debt_equity_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and de_results:
             create_factor_dashboard("DebtToEquity", "Financial Risk", ch_utils, output_dir)
-
+            
     if factor_arg == 'IC' or factor_arg == 'ALL':
         print("\n=== Running Interest Coverage Factor Analysis ===")
-        ic_results = run_factor_analysis(interest_coverage_factor, args.start_date, args.end_date,
-                                         output_dir=output_dir)
+        ic_results = run_factor_analysis(interest_coverage_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and ic_results:
             create_factor_dashboard("InterestCoverage", "Financial Risk", ch_utils, output_dir)
-
+            
     # Growth factors
     if factor_arg == 'RG' or factor_arg == 'ALL':
         print("\n=== Running Revenue Growth Factor Analysis ===")
         rg_results = run_factor_analysis(revenue_growth_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and rg_results:
             create_factor_dashboard("RevenueGrowth", "Growth", ch_utils, output_dir)
-
+            
     # ESG factors
     if factor_arg == 'BA' or factor_arg == 'ALL':
         print("\n=== Running Board Age Factor Analysis ===")
         ba_results = run_factor_analysis(board_age_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and ba_results:
             create_factor_dashboard("BoardAge", "Governance", ch_utils, output_dir)
-
+            
     if factor_arg == 'EC' or factor_arg == 'ALL':
         print("\n=== Running Executive Compensation Factor Analysis ===")
         ec_results = run_factor_analysis(exec_comp_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and ec_results:
             create_factor_dashboard("ExecCompToRevenue", "ESG Governance", ch_utils, output_dir)
-
+            
     if factor_arg == 'ER' or factor_arg == 'ALL':
         print("\n=== Running Environment Rating Factor Analysis ===")
         er_results = run_factor_analysis(env_rating_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and er_results:
             create_factor_dashboard("EnvRating", "ESG Environmental", ch_utils, output_dir)
-
+            
     # Sentiment factors
     if factor_arg == 'SENT' or factor_arg == 'ALL':
         print("\n=== Running Average Sentiment Factor Analysis ===")
         sent_results = run_factor_analysis(sentiment_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and sent_results:
             create_factor_dashboard("AvgSentiment14", "Sentiment", ch_utils, output_dir)
-
+    
     # Create comparison dashboard if requested
     if args.dashboard:
         all_factors = [
-            "PEG", "RSI14", "RSI28", "SMB", "HML", "Rm_Rf", "PB", "TradingVolume",
+            "PEG", "RSI14", "RSI28", "SMB", "HML", "Rm_Rf", "PB", "TradingVolume", 
             "ROC20", "CurrentRatio", "CashRatio", "InventoryTurnover", "GrossProfitMargin",
-            "DebtToEquity", "InterestCoverage", "RevenueGrowth", "BoardAge",
+            "DebtToEquity", "InterestCoverage", "RevenueGrowth", "BoardAge", 
             "ExecCompToRevenue", "EnvRating", "AvgSentiment14"
         ]
         create_comparison_dashboard(ch_utils, all_factors, output_dir)
-
+    
     print("\nAll analyses completed.")
-
 
 if __name__ == "__main__":
     main()
