@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import traceback
 from datetime import datetime
-from clickhouse_utils_updated import ClickHouseUtils
+from clickhouse_utils import ClickHouseUtils
 from config import CLICKHOUSE_HOST, CLICKHOUSE_PORT, CLICKHOUSE_USER, CLICKHOUSE_PASSWORD, CLICKHOUSE_DATABASE
 from config import DJIA_TICKERS, START_DATE, END_DATE
 from factors.peg_factor import PEGFactor

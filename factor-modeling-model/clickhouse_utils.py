@@ -479,7 +479,7 @@ class ClickHouseUtils:
             # Build complete query with latest update_time
             where_clause = " AND ".join(conditions)
             query = f"""
-            SELECT 
+            SELECT
                 fd.factor_name,
                 fd.factor_type,
                 fd.test_date,
@@ -493,20 +493,20 @@ class ClickHouseUtils:
                 fd.update_time
             FROM {self.database}.factor_details fd
             INNER JOIN (
-                SELECT 
+                SELECT
                     factor_name,
                     ticker,
                     MAX(update_time) as latest_update_time
                 FROM {self.database}.factor_details
                 WHERE {where_clause}
                 GROUP BY factor_name, ticker
-            ) latest ON fd.factor_name = latest.factor_name 
+            ) latest ON fd.factor_name = latest.factor_name
                 AND fd.ticker = latest.ticker
                 AND fd.update_time = latest.latest_update_time
             WHERE {where_clause}
             ORDER BY fd.ticker
             """
-            
+
             # Execute query
             result = self.client.execute(query, with_column_types=True)
             columns = [col[0] for col in result[1]]
@@ -644,27 +644,41 @@ class ClickHouseUtils:
             
             # Build complete query with latest update_time
             where_clause = " AND ".join(conditions) if conditions else "1=1"
+            # query = f"""
+            # SELECT
+            #     sr.ticker,
+            #     sr.date,
+            #     sr.return_value
+            # FROM {self.database}.temp_stock_returns sr
+            # INNER JOIN (
+            #     SELECT
+            #         ticker,
+            #         date,
+            #         MAX(update_time) as latest_update_time
+            #     FROM {self.database}.temp_stock_returns
+            #     WHERE {where_clause}
+            #     GROUP BY ticker, date
+            # ) latest ON sr.ticker = latest.ticker
+            #     AND sr.date = latest.date
+            #     AND sr.update_time = latest.latest_update_time
+            # WHERE {where_clause}
+            # ORDER BY sr.date, sr.ticker
+            # """
             query = f"""
-            SELECT 
+            SELECT
                 sr.ticker,
                 sr.date,
-                sr.return_value
+                argMax(sr.return_value, sr.update_time) AS return_value
             FROM {self.database}.temp_stock_returns sr
-            INNER JOIN (
-                SELECT 
-                    ticker,
-                    date,
-                    MAX(update_time) as latest_update_time
-                FROM {self.database}.temp_stock_returns
-                WHERE {where_clause}
-                GROUP BY ticker, date
-            ) latest ON sr.ticker = latest.ticker 
-                AND sr.date = latest.date
-                AND sr.update_time = latest.latest_update_time
-            WHERE {where_clause}
-            ORDER BY sr.date, sr.ticker
+            WHERE {where_clause}        
+            GROUP BY
+                sr.ticker,
+                sr.date   
+            ORDER BY
+                sr.date,
+                sr.ticker
             """
-            
+
             # Execute query
             result = self.client.execute(query, with_column_types=True)
             columns = [col[0] for col in result[1]]
@@ -717,28 +731,42 @@ class ClickHouseUtils:
             
             # Build complete query
             where_clause = " AND ".join(conditions)
+            # query = f"""
+            # SELECT
+            #     ft.date,
+            #     ft.high_portfolio_return,
+            #     ft.low_portfolio_return,
+            #     ft.factor_value,
+            #     ft.factor_name
+            # FROM {self.database}.factor_timeseries ft
+            # INNER JOIN (
+            #     SELECT
+            #         factor_name,
+            #         factor_type,
+            #         date,
+            #         MAX(update_time) as latest_update_time
+            #     FROM {self.database}.factor_timeseries
+            #     WHERE {where_clause}
+            #     GROUP BY factor_name, factor_type, date
+            # ) latest ON ft.factor_name = latest.factor_name
+            #     AND ft.factor_type = latest.factor_type
+            #     AND ft.date = latest.date
+            #     AND ft.update_time = latest.latest_update_time
+            # WHERE {where_clause}
+            # ORDER BY ft.date
+            # """
             query = f"""
-            SELECT 
-                ft.date,
-                ft.high_portfolio_return,
-                ft.low_portfolio_return,
-                ft.factor_value,
-                ft.factor_name
-            FROM {self.database}.factor_timeseries ft
-            INNER JOIN (
-                SELECT 
-                    factor_name,
-                    date,
-                    MAX(update_time) as latest_update_time
-                FROM {self.database}.factor_timeseries
-                GROUP BY factor_name, date
-            ) latest ON ft.factor_name = latest.factor_name 
-                AND ft.date = latest.date
-                AND ft.update_time = latest.latest_update_time
+            SELECT
+                date,
+                argMax(high_portfolio_return,  update_time) AS high_portfolio_return,
+                argMax(low_portfolio_return,   update_time) AS low_portfolio_return,
+                argMax(factor_value,           update_time) AS factor_value
+            FROM {self.database}.factor_timeseries
             WHERE {where_clause}
-            ORDER BY ft.date
+            GROUP BY factor_name, factor_type, date
+            ORDER BY date
             """
-            
+
             # Execute query
             result = self.client.execute(query, with_column_types=True)
             columns = [col[0] for col in result[1]]

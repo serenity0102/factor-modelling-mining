@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from factors.base_factor_update import BaseFactor
+from factors.base_factor import BaseFactor
 from clickhouse_driver import Client
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
