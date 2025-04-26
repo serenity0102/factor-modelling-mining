@@ -1,0 +1,7 @@
+{
+  "someOtherField": "value",
+  "additionalParams": {
+    "param1": "value1",
+    "param2": "value2"
+  }
+}

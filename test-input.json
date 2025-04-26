@@ -1,0 +1,8 @@
+{
+  "startYear": 2000,
+  "endYear": 2010,
+  "additionalParams": {
+    "param1": "value1",
+    "param2": "value2"
+  }
+}

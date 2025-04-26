@@ -1,0 +1,7 @@
+{
+  "tickers": ["AAPL", "MSFT", "GOOG", "AMZN", "META"],
+  "additionalParams": {
+    "param1": "value1",
+    "param2": "value2"
+  }
+}
