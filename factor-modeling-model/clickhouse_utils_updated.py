@@ -282,14 +282,11 @@ class ClickHouseUtils:
             print(f"Inserting {len(data)} stock return records")
             
             # Insert data in batches to avoid memory issues
-            batch_size = 50000
-            for i in range(0, len(data), batch_size):
-                batch_data = data[i:i+batch_size]
-                self.client.execute(
-                    f"INSERT INTO {self.database}.temp_stock_returns "
-                    "(ticker, date, return_value, update_time) VALUES",
-                    batch_data
-                )
+            self.client.execute(
+                f"INSERT INTO {self.database}.temp_stock_returns "
+                "(ticker, date, return_value, update_time) VALUES",
+                data
+            )
             
             print(f"Successfully stored {len(data)} stock return records")
             return True
@@ -456,19 +453,17 @@ class ClickHouseUtils:
             print(traceback.format_exc())
             return pd.DataFrame()
     
-    def get_factor_details(self, factor_name, tickers=None, factor_type=None, start_date=None, end_date=None):
+    def get_factor_test_results(self, factor_name, factor_type, tickers=None):
         """
         Get detailed results for a specific factor
         
         Parameters:
         - factor_name: Name of the factor
         - tickers: List of tickers to filter (optional)
-        - factor_type: Type of factor (optional)
-        - start_date: Start date (optional, format: YYYY-MM-DD)
-        - end_date: End date (optional, format: YYYY-MM-DD)
+        - factor_type: Type of factor (optional)\
         
         Returns:
-        - DataFrame with factor details
+        - DataFrame with factor test results
         """
         try:
             # Build query conditions
@@ -476,13 +471,7 @@ class ClickHouseUtils:
             
             if factor_type:
                 conditions.append(f"factor_type = '{factor_type}'")
-                
-            if start_date:
-                conditions.append(f"test_date >= '{start_date}'")
-            
-            if end_date:
-                conditions.append(f"test_date <= '{end_date}'")
-            
+
             if tickers:
                 ticker_list = "', '".join(tickers)
                 conditions.append(f"ticker IN ('{ticker_list}')")
@@ -571,7 +560,62 @@ class ClickHouseUtils:
             print(f"Error getting factor values: {str(e)}")
             print(traceback.format_exc())
             return pd.DataFrame()
-    
+
+    def get_factor_details(self, factor_name, factor_type, test_date):
+        """Get detailed results for a specific factor"""
+        try:
+            # Get summary
+            summary_query = f"""
+            SELECT * FROM factor_summary 
+            WHERE factor_name = '{factor_name}' 
+            AND factor_type = '{factor_type}' 
+            AND test_date = '{test_date}'
+            """
+            summary_result = self.client.execute(summary_query, with_column_types=True)
+            summary_columns = [col[0] for col in summary_result[1]]
+            summary = pd.DataFrame(summary_result[0], columns=summary_columns)
+
+            # Get details
+            details_query = f"""
+            SELECT * FROM factor_details 
+            WHERE factor_name = '{factor_name}' 
+            AND factor_type = '{factor_type}' 
+            AND test_date = '{test_date}'
+            """
+            details_result = self.client.execute(details_query, with_column_types=True)
+            details_columns = [col[0] for col in details_result[1]]
+            details = pd.DataFrame(details_result[0], columns=details_columns)
+
+            # Get time series
+            ts_query = f"""
+            SELECT * FROM factor_timeseries 
+            WHERE factor_name = '{factor_name}' 
+            AND factor_type = '{factor_type}'
+            ORDER BY date
+            """
+            ts_result = self.client.execute(ts_query, with_column_types=True)
+            ts_columns = [col[0] for col in ts_result[1]]
+            timeseries = pd.DataFrame(ts_result[0], columns=ts_columns)
+
+            if not timeseries.empty:
+                timeseries['date'] = pd.to_datetime(timeseries['date'])
+                timeseries.set_index('date', inplace=True)
+
+            return {
+                'summary': summary,
+                'details': details,
+                'timeseries': timeseries
+            }
+
+        except Exception as e:
+            print(f"Error getting factor details: {str(e)}")
+            print(traceback.format_exc())
+            return {
+                'summary': pd.DataFrame(),
+                'details': pd.DataFrame(),
+                'timeseries': pd.DataFrame()
+            }
+
     def get_stock_returns(self, tickers=None, start_date=None, end_date=None):
         """
         Retrieve stock returns data from ClickHouse
@@ -714,23 +758,7 @@ class ClickHouseUtils:
                 'low_portfolio_return': f'Low_{factor_name}',
                 'factor_value': f'{factor_name}_Factor'
             }, inplace=True)
-            
-            # If tickers are provided, get factor values for these tickers
-            if tickers and len(tickers) > 0:
-                # Get factor values for specific tickers
-                factor_values = self.get_factor_values(factor_name, factor_type, start_date, end_date)
-                
-                if not factor_values.empty:
-                    # Filter for requested tickers
-                    available_tickers = [t for t in tickers if t in factor_values.columns]
-                    
-                    if available_tickers:
-                        ticker_values = factor_values[available_tickers]
-                        
-                        # Add ticker-specific factor values to the result
-                        for ticker in available_tickers:
-                            df[ticker] = ticker_values[ticker]
-            
+
             print(f"Successfully retrieved {len(df)} {factor_name} portfolio return records")
             return df
             

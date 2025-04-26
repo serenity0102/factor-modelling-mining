@@ -171,8 +171,8 @@ def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_d
         # Batch 2: Run factor testing to get factor_test_results
         tickers = tickers or DJIA_TICKERS
         returns_df = ch_utils.get_stock_returns(tickers=tickers, start_date=start_date, end_date=end_date)
-        portfolio_returns = ch_utils.get_portfolio_returns(factor_name=factor_obj.name, tickers = tickers, start_date=start_date, end_date=end_date)
-        test_results = factor_obj.analyze_test_factor(returns_df, portfolio_returns, output_dir='factor_dashboard')
+        portfolio_returns = ch_utils.get_portfolio_returns(factor_name=factor_obj.name, factor_type=factor_obj.factor_type, tickers = tickers, start_date=start_date, end_date=end_date)
+        test_results = factor_obj.analyze_test_factor(returns_df, portfolio_returns)
 
         if test_results:
             ch_utils.store_factor_details(
@@ -181,9 +181,9 @@ def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_d
                 factor_test_results=test_results['factor_test_results']
             )
 
-        # Bacht 3: save factor_test_results and performance_results to factor_summary table
-        portfolio_returns = ch_utils.get_portfolio_returns(factor_name=factor_obj.name, tickers = DJIA_TICKERS, start_date=start_date, end_date=end_date)
-        factor_test_results = ch_utils.get_factor_details(factor_name=factor_obj.name, tickers = DJIA_TICKERS, start_date=start_date, end_date=end_date)
+        # Batch 3: save factor_test_results and performance_results to factor_summary table
+        portfolio_returns = ch_utils.get_portfolio_returns(factor_name=factor_obj.name, factor_type=factor_obj.factor_type, tickers = DJIA_TICKERS, start_date=start_date, end_date=end_date)
+        factor_test_results = ch_utils.get_factor_test_results(factor_name=factor_obj.name, factor_type=factor_obj.factor_type, tickers = DJIA_TICKERS)
         results = factor_obj.analyze_evaluate_portfolio(factor_test_results, portfolio_returns, output_dir='factor_dashboard')
 
         # Store results in ClickHouse factor_test_results table
