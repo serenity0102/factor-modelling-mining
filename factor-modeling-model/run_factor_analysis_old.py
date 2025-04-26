@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import traceback
 from datetime import datetime
-from clickhouse_utils import ClickHouseUtils
+from clickhouse_utils_old import ClickHouseUtils
 from config import CLICKHOUSE_HOST, CLICKHOUSE_PORT, CLICKHOUSE_USER, CLICKHOUSE_PASSWORD, CLICKHOUSE_DATABASE
 from config import DJIA_TICKERS, START_DATE, END_DATE
 from factors.peg_factor import PEGFactor
@@ -17,10 +17,10 @@ from factors.liquidity_factors import TradingVolumeFactor
 from factors.technical_factors import ROCFactor
 from factors.financial_health_factors import CurrentRatioFactor, CashRatioFactor
 from factors.operational_factors import InventoryTurnoverFactor, GrossProfitMarginFactor
-from factors.financial_risk_factors import DebtToEquityFactor, InterestCoverageFactor
+from factors.financial_risk_factors_old import DebtToEquityFactor, InterestCoverageFactor
 from factors.growth_factors import RevenueGrowthFactor
 from factors.esg_factors import BoardAgeFactor, ExecutiveCompensationFactor, EnvironmentRatingFactor
-from factors.sentiment_factors import AverageSentimentFactor
+from factors.sentiment_factors import NewsSentimentFactor
 
 def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_dir='factor_results'):
     """
@@ -154,47 +154,23 @@ def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_d
                 'growth_rates': growth_df
             }
         
-        # Batch 1: Run factor analysis to get factor_values, df_returns, portfolio_returns
-        # results = factor_obj.analyze(price_data, market_cap_df, additional_data, output_dir)
-        calculated_results = factor_obj.analyze_calculate_construct(price_data, market_cap_df, additional_data)
-        if calculated_results:
-            ch_utils.store_stock_returns(
-                returns_df=calculated_results['returns_df']
-            )
-
-            ch_utils.store_portfolio_returns(
-                factor_name=factor_obj.name,
-                factor_type=factor_obj.factor_type,
-                portfolio_returns=calculated_results['portfolio_returns']
-            )
-
-        # Batch 2: Run factor testing to get factor_test_results
-        tickers = tickers or DJIA_TICKERS
-        returns_df = ch_utils.get_stock_returns(tickers=tickers, start_date=start_date, end_date=end_date)
-        portfolio_returns = ch_utils.get_portfolio_returns(factor_name=factor_obj.name, factor_type=factor_obj.factor_type, tickers = tickers, start_date=start_date, end_date=end_date)
-        test_results = factor_obj.analyze_test_factor(returns_df, portfolio_returns)
-
-        if test_results:
-            ch_utils.store_factor_details(
-                factor_name=factor_obj.name,
-                factor_type=factor_obj.factor_type,
-                factor_test_results=test_results['factor_test_results']
-            )
-
-        # Batch 3: save factor_test_results and performance_results to factor_summary table
-        portfolio_returns = ch_utils.get_portfolio_returns(factor_name=factor_obj.name, factor_type=factor_obj.factor_type, tickers = DJIA_TICKERS, start_date=start_date, end_date=end_date)
-        factor_test_results = ch_utils.get_factor_test_results(factor_name=factor_obj.name, factor_type=factor_obj.factor_type, tickers = DJIA_TICKERS)
-        results = factor_obj.analyze_evaluate_portfolio(factor_test_results, portfolio_returns, output_dir='factor_dashboard')
-
-        # Store results in ClickHouse factor_test_results table
+        # Run factor analysis
+        results = factor_obj.analyze(price_data, market_cap_df, additional_data, output_dir)
+        
+        # Store results in ClickHouse
         if results:
+            # Store raw factor values - take a lot of time - uncommnet it first, may need it in future
+            ch_utils.store_factor_values(
+                factor_type=factor_obj.factor_type,
+                factor_name=factor_obj.name,
+                factor_df=results['factor_values']
+            )
+            
             # Store factor analysis results
-            ch_utils.store_factor_summary(
+            ch_utils.store_factor_results(
                 factor_name=factor_obj.name,
                 factor_type=factor_obj.factor_type,
                 results_dict=results,
-                start_date=start_date,
-                end_date=end_date,
                 description=factor_obj.description
             )
             
@@ -532,7 +508,7 @@ def main():
     env_rating_factor = EnvironmentRatingFactor()
     
     # Initialize sentiment factors
-    sentiment_factor = AverageSentimentFactor()
+    sentiment_factor = NewsSentimentFactor()
     
     # Run factor analysis based on arguments
     factor_arg = args.factor.upper() if args.factor else 'ALL'
@@ -665,7 +641,7 @@ def main():
         print("\n=== Running Average Sentiment Factor Analysis ===")
         sent_results = run_factor_analysis(sentiment_factor, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and sent_results:
-            create_factor_dashboard("AvgSentiment14", "Sentiment", ch_utils, output_dir)
+            create_factor_dashboard("NewsSentiment", "Sentiment", ch_utils, output_dir)
     
     # Create comparison dashboard if requested
     if args.dashboard:
@@ -673,7 +649,7 @@ def main():
             "PEG", "RSI14", "RSI28", "SMB", "HML", "Rm_Rf", "PB", "TradingVolume", 
             "ROC20", "CurrentRatio", "CashRatio", "InventoryTurnover", "GrossProfitMargin",
             "DebtToEquity", "InterestCoverage", "RevenueGrowth", "BoardAge", 
-            "ExecCompToRevenue", "EnvRating", "AvgSentiment14"
+            "ExecCompToRevenue", "EnvRating", "NewsSentiment"
         ]
         create_comparison_dashboard(ch_utils, all_factors, output_dir)
     

@@ -3,6 +3,10 @@ import numpy as np
 import traceback
 from datetime import datetime, date
 from clickhouse_driver import Client
+import os
+
+final_start_date = os.getenv('START_DATE', '2020-01-01')
+final_end_date = os.getenv('END_DATE', '2020-12-31')
 
 class ClickHouseUtils:
     """Utility class for ClickHouse operations"""
@@ -78,7 +82,7 @@ class ClickHouseUtils:
             ) ENGINE = MergeTree()
             ORDER BY (factor_name, factor_type, test_date, ticker)
             """)
-            
+
             # Create factor_timeseries table
             self.client.execute(f"""
             CREATE TABLE IF NOT EXISTS {self.database}.factor_timeseries (
@@ -105,6 +109,18 @@ class ClickHouseUtils:
             ) ENGINE = MergeTree()
             ORDER BY (factor_type, factor_name, ticker, date)
             """)
+
+            
+            # Create temporary table for stock returns
+            self.client.execute(f"""
+            CREATE TABLE IF NOT EXISTS {self.database}.temp_stock_returns (
+                ticker String,
+                date Date,
+                return_value Float64,
+                update_time DateTime DEFAULT now()
+            ) ENGINE = MergeTree()
+            ORDER BY (ticker, date)
+            """)
             
             print("Factor tables created successfully")
             return True
@@ -113,7 +129,7 @@ class ClickHouseUtils:
             print(f"Error creating factor tables: {str(e)}")
             print(traceback.format_exc())
             return False
-    
+
     def store_factor_values(self, factor_type, factor_name, factor_df):
         """
         Store raw factor values in the database
@@ -145,13 +161,7 @@ class ClickHouseUtils:
                         ))
 
             if data:
-                # Insert data into factor_values table using SQL directly
-                # for item in data:
-                #     self.client.execute(f"""
-                #     INSERT INTO {self.database}.factor_values
-                #     (factor_type, factor_name, ticker, date, value)
-                #     VALUES ('{item[0]}', '{item[1]}', '{item[2]}', '{item[3]}', {item[4]})
-                #     """)
+                # Insert data into factor_values table
                 self.client.execute(
                     f"INSERT INTO {self.database}.factor_values "
                     "(factor_type, factor_name, ticker, date, value) VALUES",
@@ -168,9 +178,9 @@ class ClickHouseUtils:
             print(traceback.format_exc())
             return False
 
-    def store_factor_results(self, factor_name, factor_type, results_dict, description=""):
+    def store_factor_summary(self, factor_name, factor_type, results_dict, start_date, end_date, description=""):
         """
-        Store factor test results in ClickHouse
+        Store factor summary statistics in ClickHouse
 
         Parameters:
         - factor_name: Name of the factor
@@ -182,24 +192,14 @@ class ClickHouseUtils:
         - success: Boolean indicating if operation was successful
         """
         try:
-            print(f"Storing {factor_name} factor results in ClickHouse...")
+            print(f"Storing {factor_name} factor summary in ClickHouse...")
 
             # Extract data from results_dict
             factor_test_results = results_dict.get('factor_test_results', pd.DataFrame())
             performance_results = results_dict.get('performance_results', pd.DataFrame())
-            portfolio_returns = results_dict.get('portfolio_returns', pd.DataFrame())
 
             # Prepare summary data
-            #test_date = datetime.now().strftime('%Y-%m-%d')
             test_date = datetime.today()
-
-            # Get date range from portfolio returns
-            if not portfolio_returns.empty:
-                start_date = portfolio_returns.index[0].strftime('%Y-%m-%d')
-                end_date = portfolio_returns.index[-1].strftime('%Y-%m-%d')
-            else:
-                start_date = "2000-01-01"
-                end_date = "2025-03-31"
 
             # Calculate summary statistics
             avg_beta = float(factor_test_results['Beta'].mean()) if 'Beta' in factor_test_results else 0.0
@@ -235,10 +235,158 @@ class ClickHouseUtils:
              '{description or f"{factor_name} factor analysis results"}')
             """)
             print(f"Insert data into factor_summary table has DONE")
+            return True
+            
+        except Exception as e:
+            print(f"Error storing factor summary: {str(e)}")
+            print(traceback.format_exc())
+            return False
 
-            if not factor_test_results.empty:
-                detail_data = []
+    def store_stock_returns(self, returns_df):
+        """
+        Store stock returns data to ClickHouse
+        
+        Parameters:
+        - returns_df: DataFrame with stock returns (index=dates, columns=tickers)
+        
+        Returns:
+        - success: Boolean indicating if operation was successful
+        """
+        try:
+            print("Storing stock returns data to ClickHouse...")
+            
+            if returns_df.empty:
+                print("Empty returns DataFrame provided")
+                return False
+            
+            # Get list of unique tickers in the data
+            tickers = returns_df.columns.tolist()
+            
+            # Prepare data for insertion - store all data without filtering
+            data = []
+            for date in returns_df.index:
+                for ticker in returns_df.columns:
+                    return_value = returns_df.loc[date, ticker]
+                    if pd.notna(return_value):
+                        data.append((
+                            ticker,
+                            date,
+                            float(return_value),
+                            datetime.now()  # Add update_time for tracking latest records
+                        ))
+            
+            if not data:
+                print("No stock return data to store")
+                return False
+            
+            print(f"Inserting {len(data)} stock return records")
+            
+            # Insert data in batches to avoid memory issues
+            self.client.execute(
+                f"INSERT INTO {self.database}.temp_stock_returns "
+                "(ticker, date, return_value, update_time) VALUES",
+                data
+            )
+            
+            print(f"Successfully stored {len(data)} stock return records")
+            return True
+            
+        except Exception as e:
+            print(f"Error storing stock returns: {str(e)}")
+            print(traceback.format_exc())
+            return False
 
+    def store_portfolio_returns(self, factor_name, factor_type, portfolio_returns):
+        """
+        Store portfolio returns in ClickHouse
+
+        Parameters:
+        - factor_name: Name of the factor
+        - factor_type: Type of factor (e.g., 'Technical', 'Fundamental')
+        - portfolio_returns: DataFrame with portfolio returns
+
+        Returns:
+        - success: Boolean indicating if operation was successful
+        """
+        try:
+            print(f"Storing {factor_name} portfolio returns in ClickHouse...")
+
+            factor_col = f'{factor_name}_Factor'
+
+            if portfolio_returns.empty or factor_col not in portfolio_returns.columns:
+                print(f"No portfolio returns to store for {factor_name}")
+                return False
+
+            timeseries_data = []
+
+            for date, row in portfolio_returns.iterrows():
+                factor_value = float(row.get(factor_col, 0.0))
+                high_return = float(row.get(f'High_{factor_name}', 0.0))
+                low_return = float(row.get(f'Low_{factor_name}', 0.0))
+
+                timeseries_data.append(
+                    (factor_name, factor_type, date, factor_value, high_return, low_return)
+                )
+
+            # Execute for bulk insert
+            query = f"""
+            INSERT INTO {self.database}.factor_timeseries 
+            (factor_name, factor_type, date, factor_value, high_portfolio_return, low_portfolio_return)
+            VALUES
+            """
+            self.client.execute(query, timeseries_data)
+            print(f"Insert data into factor_timeseries table has DONE")
+
+            return True
+
+        except Exception as e:
+            print(f"Error storing portfolio returns: {str(e)}")
+            print(traceback.format_exc())
+            return False
+
+    def store_factor_details(self, factor_name, factor_type, factor_test_results):
+        """
+        Store factor test results in ClickHouse
+
+        Parameters:
+        - factor_name: Name of the factor
+        - factor_type: Type of factor (e.g., 'Technical', 'Fundamental')
+        - factor_test_results: DataFrame with factor test results
+
+        Returns:
+        - success: Boolean indicating if operation was successful
+        """
+        try:
+            print(f"Storing {factor_name} factor test results in ClickHouse...")
+            
+            # Check if factor_test_results is empty based on its type
+            if isinstance(factor_test_results, dict) and not factor_test_results:
+                print(f"No test results to store for {factor_name}")
+                return False
+            elif hasattr(factor_test_results, 'empty') and factor_test_results.empty:
+                print(f"No test results to store for {factor_name}")
+                return False
+                
+            test_date = datetime.today()
+            detail_data = []
+
+            # Handle dictionary input for factor_test_results
+            if isinstance(factor_test_results, dict):
+                for ticker, row in factor_test_results.items():
+                    beta = float(row.get('Beta', 0.0))
+                    tstat = float(row.get('T-stat', 0.0))
+                    pvalue = float(row.get('P-value', 0.0))
+                    rsquared = float(row.get('R-squared', 0.0))
+                    conf_int_lower = float(row.get('Conf_Int_Lower', 0.0))
+                    conf_int_upper = float(row.get('Conf_Int_Upper', 0.0))
+                    
+                    # Data for factor_details table
+                    detail_data.append(
+                        (factor_name, factor_type, test_date, ticker, beta, tstat, pvalue, rsquared, conf_int_lower,
+                         conf_int_upper)
+                    )
+            else:
+                # Handle DataFrame input
                 for ticker, row in factor_test_results.iterrows():
                     beta = float(row.get('Beta', 0.0))
                     tstat = float(row.get('T-stat', 0.0))
@@ -246,52 +394,29 @@ class ClickHouseUtils:
                     rsquared = float(row.get('R-squared', 0.0))
                     conf_int_lower = float(row.get('Conf_Int_Lower', 0.0))
                     conf_int_upper = float(row.get('Conf_Int_Upper', 0.0))
-
+                    
+                    # Data for factor_details table
                     detail_data.append(
                         (factor_name, factor_type, test_date, ticker, beta, tstat, pvalue, rsquared, conf_int_lower,
                          conf_int_upper)
                     )
 
-                # Execute for bulk insert
-                query = f"""
-                INSERT INTO {self.database}.factor_details
-                (factor_name, factor_type, test_date, ticker, beta, tstat, pvalue, rsquared, conf_int_lower, conf_int_upper)
-                VALUES
-                """
-                self.client.execute(query, detail_data)
-                print("Insert into factor_details DONE")
-
-            if not portfolio_returns.empty and factor_col in portfolio_returns.columns:
-                timeseries_data = []
-
-                for date, row in portfolio_returns.iterrows():
-                    #date_str = date.strftime('%Y-%m-%d')
-                    date_str = datetime.today()
-                    factor_value = float(row.get(factor_col, 0.0))
-                    high_return = float(row.get(f'High_{factor_name}', 0.0))
-                    low_return = float(row.get(f'Low_{factor_name}', 0.0))
-
-                    timeseries_data.append(
-                        (factor_name, factor_type, date_str, factor_value, high_return, low_return)
-                    )
-
-                # Execute for bulk insert
-                query = f"""
-                INSERT INTO {self.database}.factor_timeseries 
-                (factor_name, factor_type, date, factor_value, high_portfolio_return, low_portfolio_return)
-                VALUES
-                """
-                self.client.execute(query, timeseries_data)
-                print(f"Insert data into factor_timeseries table has DONE")
+            # Execute for bulk insert into factor_details
+            query = f"""
+            INSERT INTO {self.database}.factor_details
+            (factor_name, factor_type, test_date, ticker, beta, tstat, pvalue, rsquared, conf_int_lower, conf_int_upper)
+            VALUES
+            """
+            self.client.execute(query, detail_data)
+            print("Insert into factor_details DONE")
             
-            print(f"Successfully stored {factor_name} factor results")
             return True
             
         except Exception as e:
-            print(f"Error storing factor results: {str(e)}")
+            print(f"Error storing factor test results: {str(e)}")
             print(traceback.format_exc())
             return False
-    
+
     def get_all_factors(self):
         """Get summary of all factors in the database"""
         try:
@@ -328,113 +453,74 @@ class ClickHouseUtils:
             print(traceback.format_exc())
             return pd.DataFrame()
     
-    def get_factor_details(self, factor_name, factor_type, test_date):
-        """Get detailed results for a specific factor"""
+    def get_factor_test_results(self, factor_name, factor_type, tickers=None):
+        """
+        Get detailed results for a specific factor
+        
+        Parameters:
+        - factor_name: Name of the factor
+        - tickers: List of tickers to filter (optional)
+        - factor_type: Type of factor (optional)\
+        
+        Returns:
+        - DataFrame with factor test results
+        """
         try:
-            # Get summary
-            summary_query = f"""
-            SELECT * FROM factor_summary 
-            WHERE factor_name = '{factor_name}' 
-            AND factor_type = '{factor_type}' 
-            AND test_date = '{test_date}'
+            # Build query conditions
+            conditions = [f"factor_name = '{factor_name}'"]
+            
+            if factor_type:
+                conditions.append(f"factor_type = '{factor_type}'")
+
+            if tickers:
+                ticker_list = "', '".join(tickers)
+                conditions.append(f"ticker IN ('{ticker_list}')")
+            
+            # Build complete query with latest update_time
+            where_clause = " AND ".join(conditions)
+            query = f"""
+            SELECT
+                fd.factor_name,
+                fd.factor_type,
+                fd.test_date,
+                fd.ticker,
+                fd.beta,
+                fd.tstat,
+                fd.pvalue,
+                fd.rsquared,
+                fd.conf_int_lower,
+                fd.conf_int_upper,
+                fd.update_time
+            FROM {self.database}.factor_details fd
+            INNER JOIN (
+                SELECT
+                    factor_name,
+                    ticker,
+                    MAX(update_time) as latest_update_time
+                FROM {self.database}.factor_details
+                WHERE {where_clause}
+                GROUP BY factor_name, ticker
+            ) latest ON fd.factor_name = latest.factor_name
+                AND fd.ticker = latest.ticker
+                AND fd.update_time = latest.latest_update_time
+            WHERE {where_clause}
+            ORDER BY fd.ticker
             """
-            summary_result = self.client.execute(summary_query, with_column_types=True)
-            summary_columns = [col[0] for col in summary_result[1]]
-            summary = pd.DataFrame(summary_result[0], columns=summary_columns)
+
+            # Execute query
+            result = self.client.execute(query, with_column_types=True)
+            columns = [col[0] for col in result[1]]
+            details = pd.DataFrame(result[0], columns=columns)
             
-            # Get details
-            details_query = f"""
-            SELECT * FROM factor_details 
-            WHERE factor_name = '{factor_name}' 
-            AND factor_type = '{factor_type}' 
-            AND test_date = '{test_date}'
-            """
-            details_result = self.client.execute(details_query, with_column_types=True)
-            details_columns = [col[0] for col in details_result[1]]
-            details = pd.DataFrame(details_result[0], columns=details_columns)
-            
-            # Get time series
-            ts_query = f"""
-            SELECT * FROM factor_timeseries 
-            WHERE factor_name = '{factor_name}' 
-            AND factor_type = '{factor_type}'
-            ORDER BY date
-            """
-            ts_result = self.client.execute(ts_query, with_column_types=True)
-            ts_columns = [col[0] for col in ts_result[1]]
-            timeseries = pd.DataFrame(ts_result[0], columns=ts_columns)
-            
-            if not timeseries.empty:
-                timeseries['date'] = pd.to_datetime(timeseries['date'])
-                timeseries.set_index('date', inplace=True)
-            
-            return {
-                'summary': summary,
-                'details': details,
-                'timeseries': timeseries
-            }
+            if details.empty:
+                print(f"No factor details found for {factor_name}")
+            else:
+                print(f"Successfully retrieved factor details for {factor_name} with {len(details)} records")
+                
+            return details
             
         except Exception as e:
             print(f"Error getting factor details: {str(e)}")
-            print(traceback.format_exc())
-            return {
-                'summary': pd.DataFrame(),
-                'details': pd.DataFrame(),
-                'timeseries': pd.DataFrame()
-            }
-    
-    def compare_factors(self, factor_names=None, factor_types=None):
-        """
-        Compare multiple factors
-        
-        Parameters:
-        - factor_names: List of factor names to compare. If None, compare all factors.
-        - factor_types: List of factor types to compare. If None, compare all types.
-        
-        Returns:
-        - DataFrame with comparison metrics
-        """
-        try:
-            where_clauses = []
-            
-            if factor_names:
-                factor_list = "', '".join(factor_names)
-                where_clauses.append(f"factor_name IN ('{factor_list}')")
-            
-            if factor_types:
-                type_list = "', '".join(factor_types)
-                where_clauses.append(f"factor_type IN ('{type_list}')")
-            
-            where_clause = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-            
-            query = f"""
-            SELECT 
-                factor_name,
-                factor_type,
-                test_date,
-                avg_beta,
-                avg_tstat,
-                avg_rsquared,
-                significant_stocks,
-                total_stocks,
-                annualized_return,
-                annualized_volatility,
-                sharpe_ratio,
-                max_drawdown,
-                update_time
-            FROM factor_summary
-            {where_clause}
-            ORDER BY sharpe_ratio DESC
-            """
-            
-            result = self.client.execute(query, with_column_types=True)
-            columns = [col[0] for col in result[1]]
-            df = pd.DataFrame(result[0], columns=columns)
-            
-            return df
-            
-        except Exception as e:
-            print(f"Error comparing factors: {str(e)}")
             print(traceback.format_exc())
             return pd.DataFrame()
     
@@ -474,7 +560,296 @@ class ClickHouseUtils:
             print(f"Error getting factor values: {str(e)}")
             print(traceback.format_exc())
             return pd.DataFrame()
-    
+
+    def get_factor_details(self, factor_name, factor_type, test_date):
+        """Get detailed results for a specific factor"""
+        try:
+            # Get summary
+            summary_query = f"""
+            SELECT * FROM factor_summary 
+            WHERE factor_name = '{factor_name}' 
+            AND factor_type = '{factor_type}' 
+            AND test_date = '{test_date}'
+            """
+            summary_result = self.client.execute(summary_query, with_column_types=True)
+            summary_columns = [col[0] for col in summary_result[1]]
+            summary = pd.DataFrame(summary_result[0], columns=summary_columns)
+
+            # Get details
+            details_query = f"""
+            SELECT * FROM factor_details 
+            WHERE factor_name = '{factor_name}' 
+            AND factor_type = '{factor_type}' 
+            AND test_date = '{test_date}'
+            """
+            details_result = self.client.execute(details_query, with_column_types=True)
+            details_columns = [col[0] for col in details_result[1]]
+            details = pd.DataFrame(details_result[0], columns=details_columns)
+
+            # Get time series
+            ts_query = f"""
+            SELECT * FROM factor_timeseries 
+            WHERE factor_name = '{factor_name}' 
+            AND factor_type = '{factor_type}'
+            ORDER BY date
+            """
+            ts_result = self.client.execute(ts_query, with_column_types=True)
+            ts_columns = [col[0] for col in ts_result[1]]
+            timeseries = pd.DataFrame(ts_result[0], columns=ts_columns)
+
+            if not timeseries.empty:
+                timeseries['date'] = pd.to_datetime(timeseries['date'])
+                timeseries.set_index('date', inplace=True)
+
+            return {
+                'summary': summary,
+                'details': details,
+                'timeseries': timeseries
+            }
+
+        except Exception as e:
+            print(f"Error getting factor details: {str(e)}")
+            print(traceback.format_exc())
+            return {
+                'summary': pd.DataFrame(),
+                'details': pd.DataFrame(),
+                'timeseries': pd.DataFrame()
+            }
+
+    def get_stock_returns(self, tickers=None, start_date=None, end_date=None):
+        """
+        Retrieve stock returns data from ClickHouse
+        
+        Parameters:
+        - tickers: List of stock tickers (optional)
+        - start_date: Start date (optional, format: YYYY-MM-DD)
+        - end_date: End date (optional, format: YYYY-MM-DD)
+        
+        Returns:
+        - DataFrame: Stock returns data (index=dates, columns=tickers)
+        """
+        try:
+            # Build query conditions
+            conditions = []
+            
+            if tickers:
+                ticker_list = "', '".join(tickers)
+                conditions.append(f"ticker IN ('{ticker_list}')")
+
+            if start_date:
+                conditions.append(f"date >= '{start_date}'")
+            
+            if end_date:
+                conditions.append(f"date <= '{end_date}'")
+            
+            # Build complete query with latest update_time
+            where_clause = " AND ".join(conditions) if conditions else "1=1"
+            # query = f"""
+            # SELECT
+            #     sr.ticker,
+            #     sr.date,
+            #     sr.return_value
+            # FROM {self.database}.temp_stock_returns sr
+            # INNER JOIN (
+            #     SELECT
+            #         ticker,
+            #         date,
+            #         MAX(update_time) as latest_update_time
+            #     FROM {self.database}.temp_stock_returns
+            #     WHERE {where_clause}
+            #     GROUP BY ticker, date
+            # ) latest ON sr.ticker = latest.ticker
+            #     AND sr.date = latest.date
+            #     AND sr.update_time = latest.latest_update_time
+            # WHERE {where_clause}
+            # ORDER BY sr.date, sr.ticker
+            # """
+            query = f"""
+            SELECT
+                sr.ticker,
+                sr.date,
+                argMax(sr.return_value, sr.update_time) AS return_value
+            FROM {self.database}.temp_stock_returns sr
+            WHERE {where_clause}        
+            GROUP BY
+                sr.ticker,
+                sr.date   
+            ORDER BY
+                sr.date,
+                sr.ticker
+            """
+
+            # Execute query
+            result = self.client.execute(query, with_column_types=True)
+            columns = [col[0] for col in result[1]]
+            df = pd.DataFrame(result[0], columns=columns)
+            
+            if df.empty:
+                print("No stock return data found")
+                return pd.DataFrame()
+            
+            # Convert date to datetime
+            df['date'] = pd.to_datetime(df['date'])
+            
+            # Pivot table to get desired format
+            pivot_df = df.pivot(index='date', columns='ticker', values='return_value')
+            
+            print(f"Successfully retrieved stock returns for {len(pivot_df)} days and {len(pivot_df.columns)} stocks")
+            return pivot_df
+            
+        except Exception as e:
+            print(f"Error retrieving stock returns: {str(e)}")
+            print(traceback.format_exc())
+            return pd.DataFrame()
+
+    def get_portfolio_returns(self, factor_name, tickers, factor_type = None, start_date=None, end_date=None):
+        """
+        Retrieve portfolio returns data from ClickHouse factor_timeseries table
+        
+        Parameters:
+        - factor_name: Name of the factor
+        - start_date: Start date (optional, format: YYYY-MM-DD)
+        - end_date: End date (optional, format: YYYY-MM-DD)
+        - tickers: List of tickers to filter factor values (optional)
+        
+        Returns:
+        - DataFrame: Portfolio returns data
+        """
+        try:
+            # Build query conditions
+            conditions = [f"factor_name = '{factor_name}'"]
+            tickers = tickers
+
+            if start_date:
+                conditions.append(f"date >= '{start_date}'")
+            
+            if end_date:
+                conditions.append(f"date <= '{end_date}'")
+
+            if factor_type:
+                conditions.append(f"factor_type = '{factor_type}'")
+            
+            # Build complete query
+            where_clause = " AND ".join(conditions)
+            # query = f"""
+            # SELECT
+            #     ft.date,
+            #     ft.high_portfolio_return,
+            #     ft.low_portfolio_return,
+            #     ft.factor_value,
+            #     ft.factor_name
+            # FROM {self.database}.factor_timeseries ft
+            # INNER JOIN (
+            #     SELECT
+            #         factor_name,
+            #         factor_type,
+            #         date,
+            #         MAX(update_time) as latest_update_time
+            #     FROM {self.database}.factor_timeseries
+            #     WHERE {where_clause}
+            #     GROUP BY factor_name, factor_type, date
+            # ) latest ON ft.factor_name = latest.factor_name
+            #     AND ft.factor_type = latest.factor_type
+            #     AND ft.date = latest.date
+            #     AND ft.update_time = latest.latest_update_time
+            # WHERE {where_clause}
+            # ORDER BY ft.date
+            # """
+            query = f"""
+            SELECT
+                date,
+                argMax(high_portfolio_return,  update_time) AS high_portfolio_return,
+                argMax(low_portfolio_return,   update_time) AS low_portfolio_return,
+                argMax(factor_value,           update_time) AS factor_value
+            FROM {self.database}.factor_timeseries
+            WHERE {where_clause}
+            GROUP BY factor_name, factor_type, date
+            ORDER BY date
+            """
+
+            # Execute query
+            result = self.client.execute(query, with_column_types=True)
+            columns = [col[0] for col in result[1]]
+            df = pd.DataFrame(result[0], columns=columns)
+            
+            if df.empty:
+                print(f"No portfolio return data found for {factor_name}")
+                return pd.DataFrame()
+            
+            # Convert date to datetime and set as index
+            df['date'] = pd.to_datetime(df['date'])
+            df.set_index('date', inplace=True)
+            
+            # Rename columns to match expected format
+            df.rename(columns={
+                'high_portfolio_return': f'High_{factor_name}',
+                'low_portfolio_return': f'Low_{factor_name}',
+                'factor_value': f'{factor_name}_Factor'
+            }, inplace=True)
+
+            print(f"Successfully retrieved {len(df)} {factor_name} portfolio return records")
+            return df
+            
+        except Exception as e:
+            print(f"Error retrieving portfolio returns: {str(e)}")
+            print(traceback.format_exc())
+            return pd.DataFrame()
+
+    def compare_factors(self, factor_names=None, factor_types=None):
+        """
+        Compare multiple factors
+
+        Parameters:
+        - factor_names: List of factor names to compare. If None, compare all factors.
+        - factor_types: List of factor types to compare. If None, compare all types.
+
+        Returns:
+        - DataFrame with comparison metrics
+        """
+        try:
+            where_clauses = []
+
+            if factor_names:
+                factor_list = "', '".join(factor_names)
+                where_clauses.append(f"factor_name IN ('{factor_list}')")
+
+            if factor_types:
+                type_list = "', '".join(factor_types)
+                where_clauses.append(f"factor_type IN ('{type_list}')")
+
+            where_clause = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+            query = f"""
+            SELECT 
+                factor_name,
+                factor_type,
+                test_date,
+                avg_beta,
+                avg_tstat,
+                avg_rsquared,
+                significant_stocks,
+                total_stocks,
+                annualized_return,
+                annualized_volatility,
+                sharpe_ratio,
+                max_drawdown,
+                update_time
+            FROM factor_summary
+            {where_clause}
+            ORDER BY sharpe_ratio DESC
+            """
+
+            result = self.client.execute(query, with_column_types=True)
+            columns = [col[0] for col in result[1]]
+            df = pd.DataFrame(result[0], columns=columns)
+
+            return df
+
+        except Exception as e:
+            print(f"Error comparing factors: {str(e)}")
+            print(traceback.format_exc())
+            return pd.DataFrame()
+
     def delete_factor(self, factor_name, factor_type, test_date=None):
         """Delete a factor from all tables"""
         try:
@@ -492,6 +867,9 @@ class ClickHouseUtils:
             
             # Delete from factor_details
             self.client.execute(f"DELETE FROM {self.database}.factor_details {where_clause}")
+            
+            # Delete from factor_test_results
+            self.client.execute(f"DELETE FROM {self.database}.factor_test_results {where_clause}")
             
             # Delete from factor_timeseries (no test_date column)
             where_clause_ts = f"WHERE factor_name = '{factor_name}' AND factor_type = '{factor_type}'"

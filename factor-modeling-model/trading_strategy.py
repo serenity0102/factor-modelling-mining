@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import backtrader as bt
 import os
 
-from clickhouse_utils import ClickHouseUtils
+from clickhouse_utils_old import ClickHouseUtils
 from config import CLICKHOUSE_HOST, CLICKHOUSE_PORT, CLICKHOUSE_USER, CLICKHOUSE_PASSWORD, CLICKHOUSE_DATABASE
 from config import DJIA_TICKERS, START_DATE, END_DATE
 
