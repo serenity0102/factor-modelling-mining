@@ -22,12 +22,13 @@ from factors.growth_factors import RevenueGrowthFactor
 from factors.esg_factors import BoardAgeFactor, ExecutiveCompensationFactor, EnvironmentRatingFactor
 from factors.sentiment_factors import AverageSentimentFactor
 
-def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_dir='factor_results'):
+def run_factor_analysis(factor_obj, batch_no, start_date, end_date, tickers=None, output_dir='factor_results'):
     """
     Run factor analysis using the provided factor object
     
     Parameters:
     - factor_obj: Factor object (instance of BaseFactor subclass)
+    - batch_no: The no of batch (1: Run all batch 2: Run calculate and construct 3:Run testing 4:Run evaluation)
     - start_date: Start date for analysis (YYYY-MM-DD)
     - end_date: End date for analysis (YYYY-MM-DD)
     - tickers: List of stock tickers to analyze (default: None, uses DJIA_TICKERS)
@@ -156,49 +157,58 @@ def run_factor_analysis(factor_obj, start_date, end_date, tickers=None, output_d
         
         # Batch 1: Run factor analysis to get factor_values, df_returns, portfolio_returns
         # results = factor_obj.analyze(price_data, market_cap_df, additional_data, output_dir)
-        calculated_results = factor_obj.analyze_calculate_construct(price_data, market_cap_df, additional_data)
-        if calculated_results:
-            ch_utils.store_stock_returns(
-                returns_df=calculated_results['returns_df']
-            )
+        if batch_no in (0,1):
+            print("Begin running Batch 1...")
 
-            ch_utils.store_portfolio_returns(
-                factor_name=factor_obj.name,
-                factor_type=factor_obj.factor_type,
-                portfolio_returns=calculated_results['portfolio_returns']
-            )
+            results = factor_obj.analyze_calculate_construct(price_data, market_cap_df, additional_data)
+            if results:
+                ch_utils.store_stock_returns(
+                    returns_df=results['returns_df']
+                )
+
+                ch_utils.store_portfolio_returns(
+                    factor_name=factor_obj.name,
+                    factor_type=factor_obj.factor_type,
+                    portfolio_returns=results['portfolio_returns']
+                )
 
         # Batch 2: Run factor testing to get factor_test_results
-        tickers = tickers or DJIA_TICKERS
-        returns_df = ch_utils.get_stock_returns(tickers=tickers, start_date=start_date, end_date=end_date)
-        portfolio_returns = ch_utils.get_portfolio_returns(factor_name=factor_obj.name, factor_type=factor_obj.factor_type, tickers = tickers, start_date=start_date, end_date=end_date)
-        test_results = factor_obj.analyze_test_factor(returns_df, portfolio_returns)
+        if batch_no in (0,2):
+            print("Begin running Batch 2...")
 
-        if test_results:
-            ch_utils.store_factor_details(
-                factor_name=factor_obj.name,
-                factor_type=factor_obj.factor_type,
-                factor_test_results=test_results['factor_test_results']
-            )
+            tickers = tickers or DJIA_TICKERS
+            returns_df = ch_utils.get_stock_returns(tickers=tickers, start_date=start_date, end_date=end_date)
+            portfolio_returns = ch_utils.get_portfolio_returns(factor_name=factor_obj.name, factor_type=factor_obj.factor_type, tickers = tickers, start_date=start_date, end_date=end_date)
+            results = factor_obj.analyze_test_factor(returns_df, portfolio_returns)
+
+            if results:
+                ch_utils.store_factor_details(
+                    factor_name=factor_obj.name,
+                    factor_type=factor_obj.factor_type,
+                    factor_test_results=results['factor_test_results']
+                )
 
         # Batch 3: save factor_test_results and performance_results to factor_summary table
-        portfolio_returns = ch_utils.get_portfolio_returns(factor_name=factor_obj.name, factor_type=factor_obj.factor_type, tickers = DJIA_TICKERS, start_date=start_date, end_date=end_date)
-        factor_test_results = ch_utils.get_factor_test_results(factor_name=factor_obj.name, factor_type=factor_obj.factor_type, tickers = DJIA_TICKERS)
-        results = factor_obj.analyze_evaluate_portfolio(factor_test_results, portfolio_returns, output_dir='factor_dashboard')
+        if batch_no in (0,3):
+            print("Begin running Batch 3...")
 
-        # Store results in ClickHouse factor_test_results table
-        if results:
-            # Store factor analysis results
-            ch_utils.store_factor_summary(
-                factor_name=factor_obj.name,
-                factor_type=factor_obj.factor_type,
-                results_dict=results,
-                start_date=start_date,
-                end_date=end_date,
-                description=factor_obj.description
-            )
-            
-            print(f"{factor_obj.name} factor analysis completed successfully.")
+            portfolio_returns = ch_utils.get_portfolio_returns(factor_name=factor_obj.name, factor_type=factor_obj.factor_type, tickers = DJIA_TICKERS, start_date=start_date, end_date=end_date)
+            factor_test_results = ch_utils.get_factor_test_results(factor_name=factor_obj.name, factor_type=factor_obj.factor_type, tickers = DJIA_TICKERS)
+            results = factor_obj.analyze_evaluate_portfolio(factor_test_results, portfolio_returns, output_dir='factor_dashboard')
+
+            # Store results in ClickHouse factor_test_results table
+            if results:
+                # Store factor analysis results
+                ch_utils.store_factor_summary(
+                    factor_name=factor_obj.name,
+                    factor_type=factor_obj.factor_type,
+                    results_dict=results,
+                    start_date=start_date,
+                    end_date=end_date,
+                    description=factor_obj.description
+                )
+
+                print(f"{factor_obj.name} factor analysis completed successfully.")
         
         return results
         
@@ -469,6 +479,7 @@ def main():
     """Main function to run factor analysis"""
     parser = argparse.ArgumentParser(description='Run factor analysis for DJIA stocks')
     parser.add_argument('--factor', type=str, help='Factor to analyze (PEG, RSI14, RSI28, or ALL)')
+    parser.add_argument('--batch-no', type=int, default=0, help='0: All  1:Caluculate and Construct   2:Test   3:Evaluate')
     parser.add_argument('--start-date', type=str, default=START_DATE, help='Start date (YYYY-MM-DD)')
     parser.add_argument('--end-date', type=str, default=END_DATE, help='End date (YYYY-MM-DD)')
     parser.add_argument('--dashboard', action='store_true', help='Generate dashboards')
@@ -539,131 +550,131 @@ def main():
     
     if factor_arg == 'PEG' or factor_arg == 'ALL':
         print("\n=== Running PEG Factor Analysis ===")
-        peg_results = run_factor_analysis(peg_factor, args.start_date, args.end_date, output_dir=output_dir)
+        peg_results = run_factor_analysis(peg_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and peg_results:
             create_factor_dashboard("PEG", "Fundamental", ch_utils, output_dir)
     
     if factor_arg == 'RSI14' or factor_arg == 'ALL':
         print("\n=== Running RSI14 Factor Analysis ===")
-        rsi14_results = run_factor_analysis(rsi14_factor, args.start_date, args.end_date, output_dir=output_dir)
+        rsi14_results = run_factor_analysis(rsi14_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and rsi14_results:
             create_factor_dashboard("RSI14", "Technical", ch_utils, output_dir)
     
     if factor_arg == 'RSI28' or factor_arg == 'ALL':
         print("\n=== Running RSI28 Factor Analysis ===")
-        rsi28_results = run_factor_analysis(rsi28_factor, args.start_date, args.end_date, output_dir=output_dir)
+        rsi28_results = run_factor_analysis(rsi28_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and rsi28_results:
             create_factor_dashboard("RSI28", "Technical", ch_utils, output_dir)
             
     # Fama-French factors
     if factor_arg == 'SMB' or factor_arg == 'ALL':
         print("\n=== Running SMB Factor Analysis ===")
-        smb_results = run_factor_analysis(smb_factor, args.start_date, args.end_date, output_dir=output_dir)
+        smb_results = run_factor_analysis(smb_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and smb_results:
             create_factor_dashboard("SMB", "Fama-French", ch_utils, output_dir)
             
     if factor_arg == 'HML' or factor_arg == 'ALL':
         print("\n=== Running HML Factor Analysis ===")
-        hml_results = run_factor_analysis(hml_factor, args.start_date, args.end_date, output_dir=output_dir)
+        hml_results = run_factor_analysis(hml_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and hml_results:
             create_factor_dashboard("HML", "Fama-French", ch_utils, output_dir)
             
     if factor_arg == 'MARKET' or factor_arg == 'ALL':
         print("\n=== Running Market Factor Analysis ===")
-        market_results = run_factor_analysis(market_factor, args.start_date, args.end_date, output_dir=output_dir)
+        market_results = run_factor_analysis(market_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and market_results:
             create_factor_dashboard("Rm_Rf", "Fama-French", ch_utils, output_dir)
             
     # Valuation factors
     if factor_arg == 'PB' or factor_arg == 'ALL':
         print("\n=== Running PB Factor Analysis ===")
-        pb_results = run_factor_analysis(pb_factor, args.start_date, args.end_date, output_dir=output_dir)
+        pb_results = run_factor_analysis(pb_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and pb_results:
             create_factor_dashboard("PB", "Valuation", ch_utils, output_dir)
             
     # Liquidity factors
     if factor_arg == 'VOLUME' or factor_arg == 'ALL':
         print("\n=== Running Trading Volume Factor Analysis ===")
-        volume_results = run_factor_analysis(volume_factor, args.start_date, args.end_date, output_dir=output_dir)
+        volume_results = run_factor_analysis(volume_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and volume_results:
             create_factor_dashboard("TradingVolume", "Liquidity", ch_utils, output_dir)
             
     # Technical factors
     if factor_arg == 'ROC' or factor_arg == 'ALL':
         print("\n=== Running ROC Factor Analysis ===")
-        roc_results = run_factor_analysis(roc_factor, args.start_date, args.end_date, output_dir=output_dir)
+        roc_results = run_factor_analysis(roc_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and roc_results:
             create_factor_dashboard("ROC20", "Technical", ch_utils, output_dir)
             
     # Financial health factors
     if factor_arg == 'CR' or factor_arg == 'ALL':
         print("\n=== Running Current Ratio Factor Analysis ===")
-        cr_results = run_factor_analysis(current_ratio_factor, args.start_date, args.end_date, output_dir=output_dir)
+        cr_results = run_factor_analysis(current_ratio_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and cr_results:
             create_factor_dashboard("CurrentRatio", "Financial Health", ch_utils, output_dir)
             
     if factor_arg == 'CASH' or factor_arg == 'ALL':
         print("\n=== Running Cash Ratio Factor Analysis ===")
-        cash_results = run_factor_analysis(cash_ratio_factor, args.start_date, args.end_date, output_dir=output_dir)
+        cash_results = run_factor_analysis(cash_ratio_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and cash_results:
             create_factor_dashboard("CashRatio", "Financial Health", ch_utils, output_dir)
             
     # Operational factors
     if factor_arg == 'IT' or factor_arg == 'ALL':
         print("\n=== Running Inventory Turnover Factor Analysis ===")
-        it_results = run_factor_analysis(inventory_turnover_factor, args.start_date, args.end_date, output_dir=output_dir)
+        it_results = run_factor_analysis(inventory_turnover_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and it_results:
             create_factor_dashboard("InventoryTurnover", "Operational", ch_utils, output_dir)
             
     if factor_arg == 'GPM' or factor_arg == 'ALL':
         print("\n=== Running Gross Profit Margin Factor Analysis ===")
-        gpm_results = run_factor_analysis(gross_margin_factor, args.start_date, args.end_date, output_dir=output_dir)
+        gpm_results = run_factor_analysis(gross_margin_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and gpm_results:
             create_factor_dashboard("GrossProfitMargin", "Operational", ch_utils, output_dir)
             
     # Financial risk factors
     if factor_arg == 'DE' or factor_arg == 'ALL':
         print("\n=== Running Debt-to-Equity Factor Analysis ===")
-        de_results = run_factor_analysis(debt_equity_factor, args.start_date, args.end_date, output_dir=output_dir)
+        de_results = run_factor_analysis(debt_equity_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and de_results:
             create_factor_dashboard("DebtToEquity", "Financial Risk", ch_utils, output_dir)
             
     if factor_arg == 'IC' or factor_arg == 'ALL':
         print("\n=== Running Interest Coverage Factor Analysis ===")
-        ic_results = run_factor_analysis(interest_coverage_factor, args.start_date, args.end_date, output_dir=output_dir)
+        ic_results = run_factor_analysis(interest_coverage_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and ic_results:
             create_factor_dashboard("InterestCoverage", "Financial Risk", ch_utils, output_dir)
             
     # Growth factors
     if factor_arg == 'RG' or factor_arg == 'ALL':
         print("\n=== Running Revenue Growth Factor Analysis ===")
-        rg_results = run_factor_analysis(revenue_growth_factor, args.start_date, args.end_date, output_dir=output_dir)
+        rg_results = run_factor_analysis(revenue_growth_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and rg_results:
             create_factor_dashboard("RevenueGrowth", "Growth", ch_utils, output_dir)
             
     # ESG factors
     if factor_arg == 'BA' or factor_arg == 'ALL':
         print("\n=== Running Board Age Factor Analysis ===")
-        ba_results = run_factor_analysis(board_age_factor, args.start_date, args.end_date, output_dir=output_dir)
+        ba_results = run_factor_analysis(board_age_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and ba_results:
             create_factor_dashboard("BoardAge", "Governance", ch_utils, output_dir)
             
     if factor_arg == 'EC' or factor_arg == 'ALL':
         print("\n=== Running Executive Compensation Factor Analysis ===")
-        ec_results = run_factor_analysis(exec_comp_factor, args.start_date, args.end_date, output_dir=output_dir)
+        ec_results = run_factor_analysis(exec_comp_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and ec_results:
             create_factor_dashboard("ExecCompToRevenue", "ESG Governance", ch_utils, output_dir)
             
     if factor_arg == 'ER' or factor_arg == 'ALL':
         print("\n=== Running Environment Rating Factor Analysis ===")
-        er_results = run_factor_analysis(env_rating_factor, args.start_date, args.end_date, output_dir=output_dir)
+        er_results = run_factor_analysis(env_rating_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and er_results:
             create_factor_dashboard("EnvRating", "ESG Environmental", ch_utils, output_dir)
             
     # Sentiment factors
     if factor_arg == 'SENT' or factor_arg == 'ALL':
         print("\n=== Running Average Sentiment Factor Analysis ===")
-        sent_results = run_factor_analysis(sentiment_factor, args.start_date, args.end_date, output_dir=output_dir)
+        sent_results = run_factor_analysis(sentiment_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and sent_results:
             create_factor_dashboard("AvgSentiment14", "Sentiment", ch_utils, output_dir)
     
