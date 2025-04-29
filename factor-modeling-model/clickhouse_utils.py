@@ -447,11 +447,30 @@ class ClickHouseUtils:
             df = pd.DataFrame(result[0], columns=columns)
             
             return df
-            
+
         except Exception as e:
             print(f"Error getting factors: {str(e)}")
             print(traceback.format_exc())
             return pd.DataFrame()
+
+    def execute_query(self, query):
+        """
+        Execute a raw SQL query and return the results
+        
+        Parameters:
+        - query: SQL query string
+        
+        Returns:
+        - List of tuples with query results
+        """
+        try:
+            result = self.client.execute(query)
+            return result
+        except Exception as e:
+            print(f"Error executing query: {str(e)}")
+            print(traceback.format_exc())
+            return []
+
     
     def get_factor_test_results(self, factor_name, factor_type, tickers=None):
         """
