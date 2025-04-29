@@ -22,7 +22,7 @@ from factors.growth_factors import RevenueGrowthFactor
 from factors.esg_factors import BoardAgeFactor, ExecutiveCompensationFactor, EnvironmentRatingFactor
 from factors.sentiment_factors import AverageSentimentFactor
 
-def run_factor_analysis(factor_obj, batch_no, start_date, end_date, tickers=None, output_dir='factor_results'):
+def run_factor_analysis(factor_obj, batch_no, tickers, start_date, end_date, output_dir='factor_results'):
     """
     Run factor analysis using the provided factor object
     
@@ -479,6 +479,8 @@ def main():
     """Main function to run factor analysis"""
     parser = argparse.ArgumentParser(description='Run factor analysis for DJIA stocks')
     parser.add_argument('--factor', type=str, help='Factor to analyze (PEG, RSI14, RSI28, or ALL)')
+    parser.add_argument('--tickers', type=str, default='AAPL,AMGN,AMZN',
+                        help='Please input a list of tickers with splitter ","')
     parser.add_argument('--batch-no', type=int, default=0, help='0: All  1:Caluculate and Construct   2:Test   3:Evaluate')
     parser.add_argument('--start-date', type=str, default=START_DATE, help='Start date (YYYY-MM-DD)')
     parser.add_argument('--end-date', type=str, default=END_DATE, help='End date (YYYY-MM-DD)')
@@ -495,6 +497,9 @@ def main():
         password=CLICKHOUSE_PASSWORD,
         database=CLICKHOUSE_DATABASE
     )
+
+    # Create tickers
+    tickers = args.tickers.split(',')
     
     # Create output directory
     output_dir = args.output_dir
@@ -550,131 +555,131 @@ def main():
     
     if factor_arg == 'PEG' or factor_arg == 'ALL':
         print("\n=== Running PEG Factor Analysis ===")
-        peg_results = run_factor_analysis(peg_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        peg_results = run_factor_analysis(peg_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and peg_results:
             create_factor_dashboard("PEG", "Fundamental", ch_utils, output_dir)
     
     if factor_arg == 'RSI14' or factor_arg == 'ALL':
         print("\n=== Running RSI14 Factor Analysis ===")
-        rsi14_results = run_factor_analysis(rsi14_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        rsi14_results = run_factor_analysis(rsi14_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and rsi14_results:
             create_factor_dashboard("RSI14", "Technical", ch_utils, output_dir)
     
     if factor_arg == 'RSI28' or factor_arg == 'ALL':
         print("\n=== Running RSI28 Factor Analysis ===")
-        rsi28_results = run_factor_analysis(rsi28_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        rsi28_results = run_factor_analysis(rsi28_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and rsi28_results:
             create_factor_dashboard("RSI28", "Technical", ch_utils, output_dir)
             
     # Fama-French factors
     if factor_arg == 'SMB' or factor_arg == 'ALL':
         print("\n=== Running SMB Factor Analysis ===")
-        smb_results = run_factor_analysis(smb_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        smb_results = run_factor_analysis(smb_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and smb_results:
             create_factor_dashboard("SMB", "Fama-French", ch_utils, output_dir)
             
     if factor_arg == 'HML' or factor_arg == 'ALL':
         print("\n=== Running HML Factor Analysis ===")
-        hml_results = run_factor_analysis(hml_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        hml_results = run_factor_analysis(hml_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and hml_results:
             create_factor_dashboard("HML", "Fama-French", ch_utils, output_dir)
             
     if factor_arg == 'MARKET' or factor_arg == 'ALL':
         print("\n=== Running Market Factor Analysis ===")
-        market_results = run_factor_analysis(market_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        market_results = run_factor_analysis(market_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and market_results:
             create_factor_dashboard("Rm_Rf", "Fama-French", ch_utils, output_dir)
             
     # Valuation factors
     if factor_arg == 'PB' or factor_arg == 'ALL':
         print("\n=== Running PB Factor Analysis ===")
-        pb_results = run_factor_analysis(pb_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        pb_results = run_factor_analysis(pb_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and pb_results:
             create_factor_dashboard("PB", "Valuation", ch_utils, output_dir)
             
     # Liquidity factors
     if factor_arg == 'VOLUME' or factor_arg == 'ALL':
         print("\n=== Running Trading Volume Factor Analysis ===")
-        volume_results = run_factor_analysis(volume_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        volume_results = run_factor_analysis(volume_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and volume_results:
             create_factor_dashboard("TradingVolume", "Liquidity", ch_utils, output_dir)
             
     # Technical factors
     if factor_arg == 'ROC' or factor_arg == 'ALL':
         print("\n=== Running ROC Factor Analysis ===")
-        roc_results = run_factor_analysis(roc_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        roc_results = run_factor_analysis(roc_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and roc_results:
             create_factor_dashboard("ROC20", "Technical", ch_utils, output_dir)
             
     # Financial health factors
     if factor_arg == 'CR' or factor_arg == 'ALL':
         print("\n=== Running Current Ratio Factor Analysis ===")
-        cr_results = run_factor_analysis(current_ratio_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        cr_results = run_factor_analysis(current_ratio_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and cr_results:
             create_factor_dashboard("CurrentRatio", "Financial Health", ch_utils, output_dir)
             
     if factor_arg == 'CASH' or factor_arg == 'ALL':
         print("\n=== Running Cash Ratio Factor Analysis ===")
-        cash_results = run_factor_analysis(cash_ratio_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        cash_results = run_factor_analysis(cash_ratio_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and cash_results:
             create_factor_dashboard("CashRatio", "Financial Health", ch_utils, output_dir)
             
     # Operational factors
     if factor_arg == 'IT' or factor_arg == 'ALL':
         print("\n=== Running Inventory Turnover Factor Analysis ===")
-        it_results = run_factor_analysis(inventory_turnover_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        it_results = run_factor_analysis(inventory_turnover_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and it_results:
             create_factor_dashboard("InventoryTurnover", "Operational", ch_utils, output_dir)
             
     if factor_arg == 'GPM' or factor_arg == 'ALL':
         print("\n=== Running Gross Profit Margin Factor Analysis ===")
-        gpm_results = run_factor_analysis(gross_margin_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        gpm_results = run_factor_analysis(gross_margin_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and gpm_results:
             create_factor_dashboard("GrossProfitMargin", "Operational", ch_utils, output_dir)
             
     # Financial risk factors
     if factor_arg == 'DE' or factor_arg == 'ALL':
         print("\n=== Running Debt-to-Equity Factor Analysis ===")
-        de_results = run_factor_analysis(debt_equity_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        de_results = run_factor_analysis(debt_equity_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and de_results:
             create_factor_dashboard("DebtToEquity", "Financial Risk", ch_utils, output_dir)
             
     if factor_arg == 'IC' or factor_arg == 'ALL':
         print("\n=== Running Interest Coverage Factor Analysis ===")
-        ic_results = run_factor_analysis(interest_coverage_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        ic_results = run_factor_analysis(interest_coverage_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and ic_results:
             create_factor_dashboard("InterestCoverage", "Financial Risk", ch_utils, output_dir)
             
     # Growth factors
     if factor_arg == 'RG' or factor_arg == 'ALL':
         print("\n=== Running Revenue Growth Factor Analysis ===")
-        rg_results = run_factor_analysis(revenue_growth_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        rg_results = run_factor_analysis(revenue_growth_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and rg_results:
             create_factor_dashboard("RevenueGrowth", "Growth", ch_utils, output_dir)
             
     # ESG factors
     if factor_arg == 'BA' or factor_arg == 'ALL':
         print("\n=== Running Board Age Factor Analysis ===")
-        ba_results = run_factor_analysis(board_age_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        ba_results = run_factor_analysis(board_age_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and ba_results:
             create_factor_dashboard("BoardAge", "Governance", ch_utils, output_dir)
             
     if factor_arg == 'EC' or factor_arg == 'ALL':
         print("\n=== Running Executive Compensation Factor Analysis ===")
-        ec_results = run_factor_analysis(exec_comp_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        ec_results = run_factor_analysis(exec_comp_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and ec_results:
             create_factor_dashboard("ExecCompToRevenue", "ESG Governance", ch_utils, output_dir)
             
     if factor_arg == 'ER' or factor_arg == 'ALL':
         print("\n=== Running Environment Rating Factor Analysis ===")
-        er_results = run_factor_analysis(env_rating_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        er_results = run_factor_analysis(env_rating_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and er_results:
             create_factor_dashboard("EnvRating", "ESG Environmental", ch_utils, output_dir)
             
     # Sentiment factors
     if factor_arg == 'SENT' or factor_arg == 'ALL':
         print("\n=== Running Average Sentiment Factor Analysis ===")
-        sent_results = run_factor_analysis(sentiment_factor, args.batch_no, args.start_date, args.end_date, output_dir=output_dir)
+        sent_results = run_factor_analysis(sentiment_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and sent_results:
             create_factor_dashboard("AvgSentiment14", "Sentiment", ch_utils, output_dir)
     
