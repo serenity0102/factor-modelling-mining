@@ -22,6 +22,43 @@ from factors.growth_factors import RevenueGrowthFactor
 from factors.esg_factors import BoardAgeFactor, ExecutiveCompensationFactor, EnvironmentRatingFactor
 from factors.sentiment_factors import AverageSentimentFactor
 
+
+# Get the latest outstanding shares from the database
+def get_latest_outstanding_shares(tickers):
+    """
+    Fetch the latest outstanding shares for the given tickers from the database
+    """
+    ch_utils = ClickHouseUtils(
+        host=CLICKHOUSE_HOST,
+        port=CLICKHOUSE_PORT,
+        user=CLICKHOUSE_USER,
+        password=CLICKHOUSE_PASSWORD,
+        database=CLICKHOUSE_DATABASE
+    )
+
+    # Query to get the latest outstanding shares for each ticker
+    query = f"""
+            SELECT ticker, value
+            FROM factor_model_tick_data_database.factor_values
+            WHERE factor_name = 'OutstandingShares'
+              AND ticker IN ({', '.join([f"'{t}'" for t in tickers])})
+              AND (ticker, update_time) IN (
+                SELECT ticker, MAX(update_time) as max_date
+                FROM factor_model_tick_data_database.factor_values
+                WHERE factor_name = 'OutstandingShares'
+                  AND ticker IN ({', '.join([f"'{t}'" for t in tickers])})
+                GROUP BY ticker
+              )
+            """
+
+    result = ch_utils.execute_query(query)
+
+    # Convert to dictionary for easy lookup
+    shares_dict = {row[0]: row[1] for row in result}
+    print(f"Retrieved outstanding shares for {len(shares_dict)} tickers")
+    return shares_dict
+
+
 def run_factor_analysis(factor_obj, batch_no, start_date, end_date, tickers=None, output_dir='factor_results'):
     """
     Run factor analysis using the provided factor object
@@ -111,17 +148,24 @@ def run_factor_analysis(factor_obj, batch_no, start_date, end_date, tickers=None
         all_dates = sorted(list(all_dates))
         market_cap_df = pd.DataFrame(index=all_dates)
         
+
+        # Get actual outstanding shares from the database
+        outstanding_shares_dict = get_latest_outstanding_shares(tickers)
+        
         # Generate market cap for each stock
         for symbol in tickers:
             if symbol in price_data:
-                # Generate random shares outstanding (between 1B and 10B)
-                shares_outstanding = np.random.uniform(1e9, 10e9)
+                # Use actual shares outstanding from database or fallback to a default value
+                shares_outstanding = outstanding_shares_dict.get(symbol, 5e9)  # Default to 5B if not found
                 
                 # Calculate market cap as price * shares outstanding
                 market_cap = price_data[symbol]['adjusted_close'] * shares_outstanding
                 
                 # Add to DataFrame
                 market_cap_df[symbol] = market_cap
+                
+                # Log the shares outstanding used
+                print(f"{symbol}: Using {shares_outstanding:,.0f} outstanding shares")
         
         # For PEG factor, we need additional fundamental data
         additional_data = None
