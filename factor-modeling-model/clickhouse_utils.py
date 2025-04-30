@@ -202,11 +202,11 @@ class ClickHouseUtils:
             test_date = datetime.today()
 
             # Calculate summary statistics
-            avg_beta = float(factor_test_results['Beta'].mean()) if 'Beta' in factor_test_results else 0.0
-            avg_tstat = float(factor_test_results['T-stat'].mean()) if 'T-stat' in factor_test_results else 0.0
-            avg_rsquared = float(factor_test_results['R-squared'].mean()) if 'R-squared' in factor_test_results else 0.0
+            avg_beta = float(factor_test_results['beta'].mean()) if 'beta' in factor_test_results else 0.0
+            avg_tstat = float(factor_test_results['tstat'].mean()) if 'tstat' in factor_test_results else 0.0
+            avg_rsquared = float(factor_test_results['rsquared'].mean()) if 'rsquared' in factor_test_results else 0.0
 
-            significant_stocks = int((abs(factor_test_results['T-stat']) > 1.96).sum()) if 'T-stat' in factor_test_results else 0
+            significant_stocks = int((abs(factor_test_results['tstat']) > 1.96).sum()) if 'tstat' in factor_test_results else 0
             total_stocks = len(factor_test_results) if not factor_test_results.empty else 0
 
             # Get performance metrics
