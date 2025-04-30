@@ -134,9 +134,8 @@ resource "aws_iam_role_policy_attachment" "lambda_policy_attachment" {
 # Create Lambda deployment package
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_dir  = "${path.module}"
+  source_dir  = "${path.module}/../../src/web-search"
   output_path = "${path.module}/lambda_function.zip"
-  excludes    = ["main.tf", "terraform.tfstate", "terraform.tfstate.backup", ".terraform", ".terraform.lock.hcl", "lambda_function.zip"]
 }
 
 # Lambda function
