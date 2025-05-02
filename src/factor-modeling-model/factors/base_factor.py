@@ -436,7 +436,7 @@ class BaseFactor:
             print(performance_results)
 
             # Plot results
-            self.plot_results(output_dir)
+            # self.plot_results(output_dir)
 
             return self.results
 
