@@ -20,7 +20,7 @@ from factors.operational_factors import InventoryTurnoverFactor, GrossProfitMarg
 from factors.financial_risk_factors import DebtToEquityFactor, InterestCoverageFactor
 from factors.growth_factors import RevenueGrowthFactor
 from factors.esg_factors import BoardAgeFactor, ExecutiveCompensationFactor, EnvironmentRatingFactor
-from factors.sentiment_factors import AverageSentimentFactor
+from factors.sentiment_factors import AverageSentimentFactor, NewsSentimentFactor
 
 # Get the latest outstanding shares from the database
 def get_latest_outstanding_shares(tickers):
@@ -592,7 +592,8 @@ def main():
     env_rating_factor = EnvironmentRatingFactor()
     
     # Initialize sentiment factors
-    sentiment_factor = AverageSentimentFactor()
+    avg_sentiment_factor = AverageSentimentFactor()
+    new_sentiment_factor = NewsSentimentFactor()
     
     # Run factor analysis based on arguments
     factor_arg = args.factor.upper() if args.factor else 'ALL'
@@ -723,10 +724,18 @@ def main():
     # Sentiment factors
     if factor_arg == 'SENT' or factor_arg == 'ALL':
         print("\n=== Running Average Sentiment Factor Analysis ===")
-        sent_results = run_factor_analysis(sentiment_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
+        sent_results = run_factor_analysis(avg_sentiment_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and sent_results:
             create_factor_dashboard("AvgSentiment14", "Sentiment", ch_utils, output_dir)
-    
+
+    if factor_arg == 'NewsSentiment' or factor_arg == 'ALL':
+        print("\n=== Running New Sentiment Factor Analysis ===")
+        sent_results = run_factor_analysis(new_sentiment_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
+        if args.dashboard and sent_results:
+            create_factor_dashboard("NewsSentiment", "Sentiment", ch_utils, output_dir)
+
+
+
     # Create comparison dashboard if requested
     if args.dashboard:
         all_factors = [
