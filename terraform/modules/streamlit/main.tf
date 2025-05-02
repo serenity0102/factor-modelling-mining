@@ -38,24 +38,18 @@ module "ecs_execution_role" {
   
   create_policy = true
   policy_name   = "${local.app_name}-execution-policy"
-  policy_description = "Allow access to  Step Functions"
+  policy_description = "Allow access to ECR"
   policy_document = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
         Action = [
-          "states:ListStateMachines",
-          "states:DescribeStateMachine",
-          "states:ListExecutions",
-          "states:DescribeExecution",
-          "states:GetExecutionHistory",
-          "states:DescribeStateMachineForExecution",
-          "states:ListActivities",
-          "states:DescribeActivity",
-          "states:ListTagsForResource"
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:BatchCheckLayerAvailability"
         ]
         Effect   = "Allow"
-        Resource = "*"
+        Resource = "arn:aws:ecr:${var.aws_region}:*:repository/${local.app_name}"
       }
     ]
   })
@@ -93,14 +87,23 @@ module "ecs_task_role" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action = [
-          "states:ListExecutions",
-          "states:DescribeExecution",
-          "states:GetExecutionHistory"
-        ]
-        Effect   = "Allow"
-        Resource = var.state_machine_arn
-      },
+            "Effect": "Allow",
+            "Action": [
+                "states:ListExecutions",
+                "states:DescribeExecution",
+                "states:GetExecutionHistory"
+            ],
+            "Resource": "${var.state_machine_arn}:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "states:ListExecutions",
+                "states:DescribeExecution",
+                "states:GetExecutionHistory"
+            ],
+            "Resource": "arn:aws:states:${var.aws_region}:*:stateMachine:*"
+        },
       {
         Action = [
           "ecr:GetDownloadUrlForLayer",
@@ -112,11 +115,6 @@ module "ecs_task_role" {
       }
     ]
   })
-  
-  # Also attach the ECR read-only policy for good measure
-  managed_policy_arns = [
-    "arn:aws:iam::aws:policy/AmazonECR-FullAccess"
-  ]
   
   tags = var.tags
 }
