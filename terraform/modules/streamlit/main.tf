@@ -36,6 +36,30 @@ module "ecs_execution_role" {
     ]
   })
   
+  create_policy = true
+  policy_name   = "${local.app_name}-execution-policy"
+  policy_description = "Allow access to  Step Functions"
+  policy_document = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "states:ListStateMachines",
+          "states:DescribeStateMachine",
+          "states:ListExecutions",
+          "states:DescribeExecution",
+          "states:GetExecutionHistory",
+          "states:DescribeStateMachineForExecution",
+          "states:ListActivities",
+          "states:DescribeActivity",
+          "states:ListTagsForResource"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+  
   managed_policy_arns = [
     "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
   ]
