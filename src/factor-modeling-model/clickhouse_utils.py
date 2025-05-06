@@ -121,7 +121,36 @@ class ClickHouseUtils:
             ) ENGINE = MergeTree()
             ORDER BY (ticker, date)
             """)
-            
+
+            # Create stock fundamental factors source table
+            self.client.execute(f"""
+            CREATE TABLE IF NOT EXISTS {self.database}.stock_fundamental_factors_source (
+                ticker String,
+                cik String,
+                accession_number String,
+                end_date Date,
+                filed_date Date,
+                form String,
+                fiscal_year Int32,
+                fiscal_quarter Int32,
+                assets_current Float64,
+                liabilities_current Float64,
+                cash_and_equivalents Float64,
+                inventory_net Float64,
+                inventory_net_prev_year Float64,
+                stockholders_equity Float64,
+                sales_revenue_net Float64,
+                sales_revenue_net_prev_year Float64,
+                cost_of_goods_sold Float64,
+                interest_expense Float64,
+                income_before_taxes Float64,
+                source_file String,
+                processed_timestamp DateTime,
+                create_datetime DateTime DEFAULT now()
+            ) ENGINE = MergeTree()
+            ORDER BY (ticker, end_date, filed_date)
+            """)
+
             print("Factor tables created successfully")
             return True
             
