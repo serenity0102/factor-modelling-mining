@@ -64,20 +64,27 @@ class DebtToEquityFactor(BaseFactor):
             ticker_list = "', '".join(tickers)
             
             # Simplified query - directly calculate debt_to_equity_ratio in a single query
-            query = f"""SELECT
-                 ticker,
-                 end_date as date,
-                 liabilities_current / stockholders_equity as debt_to_equity_ratio
-             FROM {self.db_database}.stock_fundamental_factors_source
-             WHERE ticker IN ('{ticker_list}')
-             AND end_date BETWEEN '{start_date}' AND '{end_date}'
-             AND stockholders_equity != 0  -- Avoid division by zero
-             ORDER BY ticker, date
-             """
-
-            
-            # Execute query
+            query = f"""WITH latest_data AS (
+                SELECT ticker, end_date, liabilities_current, stockholders_equity
+                FROM (
+                    SELECT *,
+                           ROW_NUMBER() OVER (PARTITION BY ticker, end_date ORDER BY processed_timestamp DESC) as rn
+                    FROM {self.db_database}.stock_fundamental_factors_source
+                    WHERE ticker IN ('{ticker_list}')
+                    AND end_date BETWEEN DATE_SUB('{start_date}', INTERVAL 1 YEAR) AND '{end_date}'
+                ) t
+                WHERE rn = 1
+            )
+            SELECT 
+                ticker,
+                end_date as date,
+                liabilities_current / stockholders_equity as debt_to_equity_ratio
+            FROM latest_data 
+            WHERE stockholders_equity != 0  -- Avoid division by zero
+            ORDER BY ticker, date
+            """
             result = client.execute(query, with_column_types=True)
+            print(f"Total {len(result[0])} {self.name} rows has been returned...")
             columns = [col[0] for col in result[1]]
             data = pd.DataFrame(result[0], columns=columns)
             
