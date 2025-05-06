@@ -11,7 +11,7 @@ class AverageSentimentFactor(BaseFactor):
     """
     Average Sentiment factor implementation
     Measures the average sentiment of news and social media about a company
-    using Amazon Bedrock's Nova Lite model to analyze sentiment on a -1 to 1 scale.
+    using Amazon Bedrock's Nova pro model to analyze sentiment on a -1 to 1 scale.
     """
     
     def __init__(self, window=14, s3_bucket="stock-news-data-u9gs99r4"):
@@ -32,7 +32,7 @@ class AverageSentimentFactor(BaseFactor):
     
     def _get_sentiment_from_bedrock(self, text):
         """
-        Get sentiment score from Amazon Bedrock Nova Lite model
+        Get sentiment score from Amazon Bedrock Nova pro model
         
         Parameters:
         - text: Text to analyze for sentiment
@@ -62,23 +62,28 @@ class AverageSentimentFactor(BaseFactor):
             {text}
             """
             
-            # Call Amazon Nova Lite model through Bedrock using converse API
+            # Call Amazon Nova pro model through Bedrock using converse API
             messages = [
                 {"role": "user", "content": [{"text": prompt}]},
             ]
             
             response = bedrock_runtime.converse(
-                modelId="us.amazon.nova-lite-v1:0",
+                modelId="us.amazon.nova-pro-v1:0",
                 messages=messages
             )
-            
+
             # Parse response
             sentiment_text = response['output']['message']['content'][0]['text'].strip()
-            
+
             # Convert to float and ensure it's in range [-1, 1]
+            match = re.search(r'(-?\d+\.\d+)', sentiment_text)
+            if match:
+                sentiment_score = float(match.group(1))
+                return max(min(sentiment_score, 1.0), -1.0)
+
             sentiment_score = float(sentiment_text)
             sentiment_score = max(min(sentiment_score, 1.0), -1.0)
-            
+
             return sentiment_score
             
         except Exception as e:
@@ -108,7 +113,8 @@ class AverageSentimentFactor(BaseFactor):
                 Key=s3_key
             )
             
-            news_data = json.loads(response['Body'].read().decode('utf-8'))
+            # news_data = json.loads(response['Body'].read().decode('utf-8'))
+            news_data = response['Body'].read().decode('utf-8')
             return news_data
         except Exception as e:
             print(f"Error retrieving news for {ticker} on {date}: {str(e)}")
@@ -144,19 +150,22 @@ class AverageSentimentFactor(BaseFactor):
                 
                 # Get news data from S3
                 news_data = self._get_news_from_s3(ticker, date_str)
-                
-                if news_data and 'answer' in news_data:
-                    # Extract the answer text
-                    answer_text = news_data['answer']
-                    
-                    # Get sentiment score from Bedrock
-                    sentiment_score = self._get_sentiment_from_bedrock(answer_text)
-                    
-                    # Store sentiment score
-                    ticker_sentiment[date_obj] = sentiment_score
-                else:
-                    # No news data available, use neutral sentiment
-                    ticker_sentiment[date_obj] = 0.0
+                sentiment_score = self._get_sentiment_from_bedrock(news_data)
+                ticker_sentiment[date_obj] = sentiment_score
+
+                #
+                # if news_data and 'answer' in news_data:
+                #     # Extract the answer text
+                #     answer_text = news_data['answer']
+                #
+                #     # Get sentiment score from Bedrock
+                #     sentiment_score = self._get_sentiment_from_bedrock(answer_text)
+                #
+                #     # Store sentiment score
+                #     ticker_sentiment[date_obj] = sentiment_score
+                # else:
+                #     # No news data available, use neutral sentiment
+                #     ticker_sentiment[date_obj] = 0.0
             
             # Convert to Series
             daily_sentiment[ticker] = pd.Series(ticker_sentiment)
@@ -188,7 +197,7 @@ class NewsSentimentFactor(BaseFactor):
     """
     News Sentiment factor implementation
     Analyzes the sentiment of recent news articles about a company
-    using Amazon Bedrock's Nova Lite model.
+    using Amazon Bedrock's Nova pro model.
     """
     
     def __init__(self, s3_bucket="stock-news-data-u9gs99r4"):
@@ -207,7 +216,7 @@ class NewsSentimentFactor(BaseFactor):
     
     def _get_sentiment_from_bedrock(self, text):
         """
-        Get sentiment score from Amazon Bedrock Nova Lite model
+        Get sentiment score from Amazon Bedrock Nova pro model
         
         Parameters:
         - text: Text to analyze for sentiment
@@ -237,7 +246,7 @@ class NewsSentimentFactor(BaseFactor):
             {text}
             """
             
-            # Call Amazon Nova Lite model through Bedrock using converse API
+            # Call Amazon Nova pro model through Bedrock using converse API
             messages = [
                 {"role": "user", "content": [{"text": prompt}]},
             ]
