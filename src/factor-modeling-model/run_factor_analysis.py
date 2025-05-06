@@ -722,17 +722,17 @@ def main():
             create_factor_dashboard("EnvRating", "ESG Environmental", ch_utils, output_dir)
             
     # Sentiment factors
-    if factor_arg == 'SENT' or factor_arg == 'ALL':
+    if factor_arg == 'AVGSENT' or factor_arg == 'ALL':
         print("\n=== Running Average Sentiment Factor Analysis ===")
         sent_results = run_factor_analysis(avg_sentiment_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and sent_results:
             create_factor_dashboard("AvgSentiment14", "Sentiment", ch_utils, output_dir)
 
-    if factor_arg == 'NewsSentiment' or factor_arg == 'ALL':
+    if factor_arg == 'NEWSENT' or factor_arg == 'ALL':
         print("\n=== Running New Sentiment Factor Analysis ===")
         sent_results = run_factor_analysis(new_sentiment_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and sent_results:
-            create_factor_dashboard("NewsSentiment", "Sentiment", ch_utils, output_dir)
+            create_factor_dashboard("NEWSENT", "Sentiment", ch_utils, output_dir)
 
 
 
