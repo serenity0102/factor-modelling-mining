@@ -27,7 +27,7 @@ docker buildx build --platform linux/amd64 -t factor-mining-visualization:latest
 
 # Log in to ECR
 echo "Logging in to ECR..."
-aws ecr get-login-password --region us-east-1 --profile factor | docker login --username AWS --password-stdin $ECR_REPO
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REPO
 
 # Tag and push the image
 echo "Tagging and pushing image to ECR..."
