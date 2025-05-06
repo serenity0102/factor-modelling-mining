@@ -25,7 +25,7 @@ class AverageSentimentFactor(BaseFactor):
         self.window = window
         self.s3_bucket = s3_bucket
         super().__init__(
-            name=f"AvgSentiment{window}",
+            name=f"AVGSENT{window}",
             factor_type="Sentiment",
             description=f"Average Sentiment over {window} days. Measures the average sentiment of news and social media about a company using Amazon Bedrock."
         )
@@ -200,7 +200,7 @@ class NewsSentimentFactor(BaseFactor):
         """
         self.s3_bucket = s3_bucket
         super().__init__(
-            name="NewsSentiment",
+            name="NEWSENT",
             factor_type="Sentiment",
             description="Sentiment of recent news articles about a company using Amazon Bedrock."
         )
