@@ -103,7 +103,7 @@ def get_factor_data():
         'ExecCompToRevenue': 'EC',
         'EnvRating': 'ER',
         'AvgSentiment14': 'SENT',
-        'NewsSentiment': 'NewsSentiment'
+        'NEWSENT': 'NEWSENT'
     }
     
     # Add a column for Step Function Input Arg name
@@ -235,7 +235,7 @@ def main():
         | EC | ExecCompToRevenue | ESG Governance |
         | ER | EnvRating | ESG Environmental |
         | SENT | AvgSentiment14 | Sentiment |
-        | NewsSentiment | NewsSentiment | Sentiment |
+        | NEWSENT | NEWSENT | Sentiment |
         """)
     
     # Sidebar for filters
@@ -553,7 +553,7 @@ def main():
                                 'EC': 'ExecCompToRevenue',
                                 'ER': 'EnvRating',
                                 'SENT': 'AvgSentiment14',
-                                'NewsSentiment': 'NewsSentiment'
+                                'NEWSENT': 'NEWSENT'
                             }
                             
                             # We're already filtering by selected_input_args at the beginning of tab3
