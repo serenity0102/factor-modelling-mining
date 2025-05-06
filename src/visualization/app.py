@@ -52,7 +52,24 @@ def get_factor_data():
         avg_tstat,
         avg_rsquared,
         update_time
-    FROM factor_summary
+    FROM (
+        SELECT 
+            factor_name,
+            factor_type,
+            test_date,
+            start_date,
+            end_date,
+            avg_beta,
+            avg_tstat,
+            avg_rsquared,
+            update_time,
+            ROW_NUMBER() OVER (
+                PARTITION BY factor_name, start_date, end_date 
+                ORDER BY update_time DESC
+            ) AS rn
+        FROM factor_summary
+    ) t
+    WHERE rn = 1
     ORDER BY test_date DESC, factor_name
     """
     result = client.execute(query)
@@ -153,6 +170,10 @@ def get_step_function_executions():
                 )
                 
                 # Parse input to get thread_no, parallel_m, and factor
+                if not all(key in input_data and input_data[key] is not None for key in
+                           ['thread_no', 'parallel_m', 'factor']):
+                    continue  # Skip this execution if any required key is missing or None
+
                 try:
                     input_data = json.loads(exec_details.get('input', '{}'))
                     thread_no = input_data.get('thread_no', 'Unknown')
@@ -293,7 +314,7 @@ def main():
         st.header("Factor Performance Summary")
         
         # Create tabs for different views
-        tab1, tab2, tab3 = st.tabs(["Factor Summary", "Performance Metrics", "Step Function Performance"])
+        tab1, tab2, tab3, tab4 = st.tabs(["Factor Summary", "Performance Metrics", "Step Function Performance", "Architecture"])
         
         with tab1:
             # Display factor summary with Step Function Input Arg names
@@ -688,6 +709,87 @@ def main():
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         st.info("Check your Clickhouse connection parameters and ensure the database is accessible.")
+        
+    # Architecture tab
+    with tab4:
+        st.subheader("Factor Mining Architecture")
+        
+        # Display the architecture image from S3
+        st.image("https://d35e4qkdhhuz52.cloudfront.net/architecture/factor-mining-architecture.png",
+                caption="Factor Mining Platform Architecture", 
+                use_column_width=True)
+        
+        # Add explanation about the architecture
+        st.markdown("""
+        ## How Factor Mining Works
+        
+        The Factor Mining Platform uses a combination of AWS services to collect, process, and analyze financial data to discover 
+        and validate investment factors. The architecture is designed for scalability, reliability, and performance.
+        
+        ### Key Components:
+        
+        1. **Data Collection**: Lambda functions collect market data, SEC filings, and web search results
+        2. **Data Storage**: Clickhouse database for time-series data and S3 buckets for raw data
+        3. **Processing**: AWS Step Functions and AWS Batch for parallel factor mining
+        4. **Visualization**: Streamlit application (this dashboard) for visualizing results
+        
+        ### Technology Stack:
+        
+        - **AWS Step Functions**: Orchestrates the factor mining workflow
+        - **AWS Batch**: Runs compute-intensive factor calculations
+        - **Amazon S3**: Stores raw and processed data
+        - **Amazon Clickhouse**: High-performance time-series database
+        - **AWS Lambda**: Serverless data collection and processing
+        - **Amazon Bedrock**: Provides GenAI capabilities for sentiment analysis
+        """)
+        
+        # Display the GenAI code snippet
+        st.subheader("GenAI in Factor Mining")
+        st.markdown("""
+        The platform leverages Amazon Bedrock's Nova Pro model for sentiment analysis of financial news and reports.
+        Below is the code snippet showing how we use Amazon Bedrock for sentiment analysis:
+        """)
+        
+        st.code("""
+# Prepare prompt for sentiment analysis
+prompt = f\"\"\"
+Analyze the sentiment of the following text about a company's stock and financial performance.
+Rate the sentiment on a scale from -1 to 1, where:
+- -1 represents extremely negative sentiment
+- 0 represents neutral sentiment
+- 1 represents extremely positive sentiment
+
+Only respond with a single number between -1 and 1, with up to two decimal places. No need explanation.
+
+Text to analyze:
+{text}
+\"\"\"
+
+# Call Amazon Nova Pro model through Bedrock using converse API
+messages = [
+    {"role": "user", "content": [{"text": prompt}]},
+]
+
+response = bedrock_runtime.converse(
+    modelId="us.amazon.nova-pro-v1:0",
+    messages=messages
+)
+
+# Parse response
+sentiment_text = response['output']['message']['content'][0]['text'].strip()
+sentiment_score = float(sentiment_text)
+        """, language="python")
+        
+        st.markdown("""
+        ### Benefits of GenAI in Factor Mining
+        
+        - **Sentiment Analysis**: Extracts sentiment from financial news, reports, and social media
+        - **Pattern Recognition**: Identifies patterns in market data that traditional methods might miss
+        - **Natural Language Processing**: Processes unstructured text data from various sources
+        - **Automated Research**: Accelerates the research process by automating data analysis
+        
+        The sentiment scores generated by this process are used as inputs to factor models, allowing us to incorporate market sentiment into our investment strategies.
+        """)
 
 if __name__ == "__main__":
     main()
