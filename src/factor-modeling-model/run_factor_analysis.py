@@ -722,7 +722,7 @@ def main():
             create_factor_dashboard("EnvRating", "ESG Environmental", ch_utils, output_dir)
             
     # Sentiment factors
-    if factor_arg == 'AVGSENT' or factor_arg == 'ALL':
+    if factor_arg == 'AVGSENT14' or factor_arg == 'ALL':
         print("\n=== Running Average Sentiment Factor Analysis ===")
         sent_results = run_factor_analysis(avg_sentiment_factor, args.batch_no, tickers, args.start_date, args.end_date, output_dir=output_dir)
         if args.dashboard and sent_results:
@@ -742,7 +742,7 @@ def main():
             "PEG", "RSI14", "RSI28", "SMB", "HML", "Rm_Rf", "PB", "TradingVolume", 
             "ROC20", "CurrentRatio", "CashRatio", "InventoryTurnover", "GrossProfitMargin",
             "DebtToEquity", "InterestCoverage", "RevenueGrowth", "BoardAge", 
-            "ExecCompToRevenue", "EnvRating", "AvgSentiment14"
+            "ExecCompToRevenue", "EnvRating", "NEWSENT", "AVGSENT14"
         ]
         create_comparison_dashboard(ch_utils, all_factors, output_dir)
     
