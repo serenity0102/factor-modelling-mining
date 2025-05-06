@@ -372,8 +372,9 @@ def main():
                     st.plotly_chart(fig_rsq, use_container_width=True)
                 
                 # Beta vs T-stat scatter plot
+                plot_data = filtered_data.dropna(subset=['avg_rsquared'])
                 fig_scatter = px.scatter(
-                    filtered_data,
+                    plot_data,
                     x='avg_beta',
                     y='avg_tstat',
                     color='factor_type',
