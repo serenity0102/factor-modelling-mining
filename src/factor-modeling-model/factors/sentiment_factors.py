@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import os
 import re
 from factors.base_factor import BaseFactor
+import time
 
 class AverageSentimentFactor(BaseFactor):
     """
@@ -42,7 +43,7 @@ class AverageSentimentFactor(BaseFactor):
         """
         try:
             # Initialize Bedrock client with profile
-            session = boto3.Session(profile_name='factor')
+            session = boto3.Session()
             bedrock_runtime = session.client(
                 service_name='bedrock-runtime',
                 region_name='us-east-1'  # Adjust region as needed
@@ -71,6 +72,10 @@ class AverageSentimentFactor(BaseFactor):
                 modelId="us.amazon.nova-pro-v1:0",
                 messages=messages
             )
+
+            # sleep for one second because of ai quota
+            time.sleep(1)
+
 
             # Parse response
             sentiment_text = response['output']['message']['content'][0]['text'].strip()
@@ -104,7 +109,7 @@ class AverageSentimentFactor(BaseFactor):
         """
         try:
             # Use the factor profile for S3 access
-            session = boto3.Session(profile_name='factor')
+            session = boto3.Session()
             s3_client = session.client('s3')
             s3_key = f"{ticker}/{date}/market_news.json"
             
@@ -113,8 +118,8 @@ class AverageSentimentFactor(BaseFactor):
                 Key=s3_key
             )
             
-            # news_data = json.loads(response['Body'].read().decode('utf-8'))
-            news_data = response['Body'].read().decode('utf-8')
+            news_data = json.loads(response['Body'].read().decode('utf-8'))
+            # news_data = response['Body'].read().decode('utf-8')
             return news_data
         except Exception as e:
             print(f"Error retrieving news for {ticker} on {date}: {str(e)}")
@@ -150,22 +155,22 @@ class AverageSentimentFactor(BaseFactor):
                 
                 # Get news data from S3
                 news_data = self._get_news_from_s3(ticker, date_str)
-                sentiment_score = self._get_sentiment_from_bedrock(news_data)
-                ticker_sentiment[date_obj] = sentiment_score
+                # sentiment_score = self._get_sentiment_from_bedrock(news_data)
+                # ticker_sentiment[date_obj] = sentiment_score
 
-                #
-                # if news_data and 'answer' in news_data:
-                #     # Extract the answer text
-                #     answer_text = news_data['answer']
-                #
-                #     # Get sentiment score from Bedrock
-                #     sentiment_score = self._get_sentiment_from_bedrock(answer_text)
-                #
-                #     # Store sentiment score
-                #     ticker_sentiment[date_obj] = sentiment_score
-                # else:
-                #     # No news data available, use neutral sentiment
-                #     ticker_sentiment[date_obj] = 0.0
+
+                if news_data and 'answer' in news_data:
+                    # Extract the answer text
+                    answer_text = news_data['answer']
+
+                    # Get sentiment score from Bedrock
+                    sentiment_score = self._get_sentiment_from_bedrock(answer_text)
+
+                    # Store sentiment score
+                    ticker_sentiment[date_obj] = sentiment_score
+                else:
+                    # No news data available, use neutral sentiment
+                    ticker_sentiment[date_obj] = 0.0
             
             # Convert to Series
             daily_sentiment[ticker] = pd.Series(ticker_sentiment)
@@ -226,7 +231,7 @@ class NewsSentimentFactor(BaseFactor):
         """
         try:
             # Initialize Bedrock client with profile
-            session = boto3.Session(profile_name='factor')
+            session = boto3.Session()
             bedrock_runtime = session.client(
                 service_name='bedrock-runtime',
                 region_name='us-east-1'  # Adjust region as needed
@@ -255,6 +260,9 @@ class NewsSentimentFactor(BaseFactor):
                 modelId="us.amazon.nova-pro-v1:0",
                 messages=messages
             )
+
+            # sleep for one second because of ai quota
+            time.sleep(1)
             
             # Parse response
             sentiment_text = response['output']['message']['content'][0]['text'].strip()
@@ -288,7 +296,7 @@ class NewsSentimentFactor(BaseFactor):
         """
         try:
             # Use the factor profile for S3 access
-            session = boto3.Session(profile_name='factor')
+            session = boto3.Session()
             s3_client = session.client('s3')
             s3_key = f"{ticker}/{date}/market_news.json"
             
