@@ -50,8 +50,8 @@ def get_factor_data():
         test_date,
         start_date,
         end_date,
-        avg_beta,
-        avg_tstat,
+        abs(avg_beta) AS avg_beta,
+        abs(avg_tstat) AS avg_tstat,
         avg_rsquared,
         update_time
     FROM (
@@ -67,7 +67,7 @@ def get_factor_data():
             update_time,
             ROW_NUMBER() OVER (
                 PARTITION BY factor_name, start_date, end_date 
-                ORDER BY update_time DESC
+                ORDER BY avg_rsquared DESC
             ) AS rn
         FROM factor_summary
     ) t
